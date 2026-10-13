@@ -1,0 +1,49 @@
+# Ignore rules for Sideboard.
+#
+# The private locations from docs/setup.md are deliberately excluded so that no
+# database, log, provider cache or personal export can be committed by accident.
+# Synthetic test fixtures and schemas ARE committed, which is why the negations at the
+# bottom exist.
+
+# --- local Python environment and build output
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+
+# --- private runtime data
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+*.log
+sideboard-demo.sqlite3
+
+# --- private imports and exports
+# Broker statements, hand-kept CSV files, Google Takeout archives and calendar feeds.
+*.csv
+*.ics
+*positions*.json
+*holdings*.json
+*watch-history*.json
+*takeout*.json
+*subscriptions*.json
+
+# --- committed intentionally: synthetic fixtures and shipped schemas
+!tests/**/*.csv
+!tests/**/*.json
+!tests/**/*.ics
+!tests/**/*.xml
+!templates/**/*.csv
+!templates/**/*.json
+!src/sideboard/schemas/*.json
+
+# --- macOS
+.DS_Store
+
+# --- local configuration overrides
+config.local.toml
+*.local.toml

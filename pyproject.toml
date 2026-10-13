@@ -1,0 +1,75 @@
+[project]
+name = "sideboard"
+version = "0.1.0"
+description = "Local Mac TUI dashboard for an iPad extended display"
+readme = "README.md"
+requires-python = ">=3.14"
+license = { text = "MIT" }
+dependencies = [
+    "aiosqlite>=0.21.0",
+    "feedparser>=6.0.11",
+    "httpx>=0.28.1",
+    "psutil>=7.0.0",
+    "pydantic>=2.11.0",
+    "textual>=6.0.0",
+]
+
+[project.optional-dependencies]
+markets = ["yfinance>=0.2.60"]
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.400",
+    "pytest>=8.4.0",
+    "pytest-asyncio>=1.1.0",
+    "respx>=0.22.0",
+    "ruff>=0.12.0",
+]
+
+[project.scripts]
+sideboard = "sideboard.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sideboard"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+# The default run is offline and deterministic; live probes are explicit.
+addopts = "-m 'not live'"
+asyncio_default_fixture_loop_scope = "function"
+filterwarnings = ["error::RuntimeWarning"]
+markers = ["live: explicit live network smoke test"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "C4", "SIM", "RET", "PTH", "RUF", "ASYNC"]
+ignore = [
+    "E501",
+    # A `timeout` parameter on an async function is deliberate here: it is a deadline
+    # handed to asyncio.timeout/wait_for or to httpx, not a substitute for one.
+    "ASYNC109",
+    # Textual requires class-level BINDINGS/COMPONENT_CLASSES containers, which are
+    # intentionally shared class attributes rather than per-instance state.
+    "RUF012",
+]
+# Typography that is deliberate: a card shows ×, › and — rather than ASCII lookalikes.
+allowed-confusables = ["×", "÷", "−", "›", "–", "—", "·", "…", "≤", "≥", "◆", "↻", "▶", "◀", "•"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests may assert on broad exceptions and mirror APIs that take a timeout parameter.
+"tests/**" = ["B017", "ASYNC109"]
+
+[tool.pyright]
+include = ["src", "tests"]
+pythonVersion = "3.14"
+typeCheckingMode = "basic"
+reportMissingTypeStubs = false
