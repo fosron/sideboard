@@ -1,0 +1,118 @@
+# Registered features, sources and widgets
+
+This index is generated from the live registry, so it matches the running code.
+`uv run sideboard features list` prints the same information without fetching data.
+
+`uv run sideboard features list --json` emits it machine-readably.
+
+| Feature | Source type | Payload schema | Capabilities | Cadence (active / ambient / background) | Setup needed | Demo data |
+|---|---|---|---|---|---|---|
+| weather | `weather.forecast` | `weather.forecast` v1 | http_public | 1200 / 1200 / 3600 s | coordinates + IANA timezone | yes |
+| news | `news.feeds` | `news.feeds` v1 | http_public | 1200 / 1200 / 3600 s | at least one validated feed | yes |
+| hackernews | `hackernews.stories` | `hackernews.stories` v1 | http_public | 300 / 300 / 900 s | none | yes |
+| youtube | `youtube.uploads` | `youtube.uploads` v1 | file, http_public | 1800 / 1800 / 7200 s | channel IDs and/or a Takeout path | yes |
+| reddit | `reddit.threads` | `reddit.threads` v1 | http_public | 3600 / 3600 / 7200 s | none for link-only mode | yes |
+| portfolio | `portfolio.holdings` | `portfolio.holdings` v1 | repository | import-driven (3600 s fallback) | none; empty state is valid | yes |
+| portfolio | `portfolio.prices` | `portfolio.prices` v1 | repository | import-driven (3600 s fallback) | none; empty state is valid | yes |
+| fx | `fx.rates` | `fx.rates` v1 | repository, http_public, file | import-driven (43200 s in reference mode) | none for manual mode | yes |
+| markets | `markets.quotes` | `markets.quotes` v1 | http_public | 3600 / 3600 / 14400 s | explicit symbol mapping, optional extra | yes |
+| mac_system | `mac.metrics` | `mac.metrics` v1 | local_metrics | 5 / 15 / 60 s | none | yes |
+| docker_local | `docker.containers` | `docker.containers` v1 | cli | 15 / 15 / 60 s | pinned local context | yes |
+| local_snapshot | `local_snapshot.file` | `local_snapshot.file` v1 | file | 30 / 60 / 120 s | an explicit file path | yes |
+| diagnostics | — | host-owned runtime status | — | — | none | n/a |
+
+Notes on cadence: `import-driven` sources never poll. They publish the current local
+state once at start-up and again after a manual edit or a successful import. A source no
+widget consumes owns no recurring task at all.
+
+## Widgets
+
+| Widget type | Accepted inputs | Category | Compact view | Detail view |
+|---|---|---|---|---|
+| `weather.summary` | `primary`: weather.forecast | world | temperature, wind, rain next 6 h | current conditions, 24 h, 7-day table |
+| `news.digest` | `primary`: news.feeds | world | deterministic diversity digest | per-bucket list plus feed health |
+| `news.saved` | — (local state) | world | saved reading/video links | same list, longer |
+| `hackernews.list` | `primary`: hackernews.stories | software | ranked item list | up to 30 items |
+| `youtube.uploads` | `primary`: youtube.uploads | media | recent uploads with rank basis | per-channel problem table |
+| `reddit.list` | `primary`: reddit.threads (optional) | software | threads, or link-only community links | grouped by community |
+| `portfolio.summary` | `positions`, `prices`?, `fx`?, `markets`? | finance | tracked value, priced count, weights | per-holding table |
+| `portfolio.holdings` | `positions`, `prices`?, `fx`?, `markets`? | finance | holdings table with basis columns | adds cost basis and reported values |
+| `portfolio.events` | `positions` | finance | dividends and investor links | dated events |
+| `portfolio.instrument` | `positions`, `prices`?, `fx`?, `markets`? | finance | one holding's concentration and events | quantity, price, value, share |
+| `fx.summary` | `primary`: fx.rates | finance | directed rate table | plus missing-direction warning |
+| `mac.summary` | `primary`: mac.metrics | infrastructure | CPU, RAM, disk, network, battery, CPU sparkline | overview metrics plus history |
+| `mac.details` | `primary`: mac.metrics | infrastructure | full metric set | swap, uptime, per-volume disk, I/O, optional processes |
+| `docker.summary` | `primary`: docker.containers | infrastructure | context, counts, engine CPU and memory | engine identity and collected notes |
+| `docker.table` | `primary`: docker.containers | infrastructure | containers grouped by Compose project | table with restarts and notes |
+| `local_snapshot.metrics` | `primary`: local_snapshot.file (optional) | infrastructure | producer metrics with histories | all metrics with their basis |
+| `local_snapshot.items` | `primary`: local_snapshot.file (optional) | infrastructure | producer items | longer item list |
+| `diagnostics.sources` | — (host-owned) | infrastructure | counts and short table | full source table and setup problems |
+| `diagnostics.host` | — (host-owned) | infrastructure | mode, config revision, paths | same with pending writes |
+
+A widget with an `optional` input renders an honest state when that binding is absent.
+`news.saved`, `diagnostics.*` and `local_snapshot.*` need no collector at all.
+
+## Capability vocabulary
+
+| Capability | What the host injects | Boundary |
+|---|---|---|
+| `http_public` | `HttpReader` in public scope | host allowlist, private/loopback refused, redirects revalidated, 2 MiB cap, 20 s deadline |
+| `http_local` | `HttpReader` bound to an explicit host allowlist | for approved local services only |
+| `file` | `FileReader` restricted to configured paths | regular files only, 1–2 MiB cap, no directories |
+| `local_metrics` | nothing (the feature owns its `psutil` adapter) | read-only counters, no privileged helper |
+| `cli` | `CommandRunner` with one slot | fixed argv arrays, timeout, output cap, reaped children |
+| `repository` | the shared `Database` handle | feature-owned namespaced SQL only; UI never issues SQL |
+
+## Permissions and privacy notes
+
+* **No credential is required.** `portfolio` and `fx` in `manual_import` mode are fully
+  local; `markets` is off by default.
+* **Docker:** an existing local socket is powerful. Sideboard restricts itself to
+  read-only inventory/stats/narrow inspect and never describes socket access as an
+  enforced read-only credential.
+* **Mac:** no root, no Full Disk Access, no daemon. Process details are opt-in and
+  collect names and IDs only.
+* **Privacy mode** masks financial amounts, process names, container names and Compose
+  project names.
+* **Reddit:** the shipped default is link-only. The public RSS form answered on
+  2026-10-13, but permission is the operator's decision — see
+  `docs/source-validation.md`.
+
+## Where each feature lives
+
+| Feature | Module | Tests | Fixtures |
+|---|---|---|---|
+| weather | `src/sideboard/features/weather/` | `tests/features/weather/` | synthetic Open-Meteo body |
+| news | `src/sideboard/features/news/` | `tests/features/news/` | synthetic RSS in-test |
+| hackernews | `src/sideboard/features/hackernews/` | `tests/features/hackernews/` | synthetic list + item JSON |
+| youtube | `src/sideboard/features/youtube/` | `tests/features/youtube/` | synthetic feed, two Takeout CSV variants, history JSON |
+| reddit | `src/sideboard/features/reddit/` | `tests/features/reddit/` | synthetic Atom feeds |
+| portfolio | `src/sideboard/features/portfolio/` | `tests/features/portfolio/` | synthetic CSVs in-test |
+| fx | `src/sideboard/features/fx/` | `tests/features/fx/` | synthetic rate bodies |
+| markets | `src/sideboard/features/markets/` | covered by integration tests | synthetic payload |
+| mac_system | `src/sideboard/features/mac_system/` | `tests/features/mac_system/` | fake `psutil` adapter |
+| docker_local | `src/sideboard/features/docker_local/` | `tests/features/docker_local/` | fake command runner |
+| local_snapshot | `src/sideboard/features/local_snapshot/` | `tests/features/local_snapshot/` | valid/invalid/partial snapshots |
+| diagnostics | `src/sideboard/features/diagnostics/` | `tests/features/fx/` covers the presenters | — |
+
+No fixture contains personal data. `example.invalid` and `DEMO-*` identifiers are
+synthetic.
+
+## Known limits
+
+* Publisher feeds change; a feed that stops parsing is reported per feed, and the rest of
+  the digest continues.
+* YouTube handles (`@name`) are **not** resolved by scraping — supply a channel ID or a
+  Takeout import.
+* Google Takeout watch history is imported once; it is a snapshot, not a live
+  subscription sync. The ranking is called *recent viewing frequency*, never minutes
+  watched.
+* Reddit scores and comment counts are absent in RSS mode and stay absent.
+* Market quotes come from one optional, unofficial source with an explicit symbol map.
+  `VRC.WA` is a candidate mapping until the listing is verified against a statement.
+* Missing quotes and missing FX rates are shown as missing, not as zero.
+* Docker Desktop storage figures describe the engine's disk image, not the Mac
+  filesystem.
+* Solar, IBKR Flex, mailbox automation, calendar access, Tailscale and release/CI
+  widgets from the plan's optional list are **not implemented**; `local_snapshot.file`
+  is the intended route for them and needs no Python.
