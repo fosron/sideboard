@@ -1,0 +1,169 @@
+"""{{TITLE}} feature — template.
+
+Replace the placeholder logic with a real bounded acquisition. The structure below is
+the whole contract: a typed settings model, an immutable payload, one provider that
+performs exactly one acquisition, and one pure presenter.
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime, timedelta
+
+from pydantic import BaseModel, ConfigDict
+
+from sideboard.core.contracts import (
+    Cadence,
+    Coverage,
+    FeatureSpec,
+    InputBinding,
+    Item,
+    Precision,
+    PresentInput,
+    ProviderBuild,
+    Severity,
+    SourcePayload,
+    SourceSpec,
+    StatusView,
+    ViewModel,
+    WidgetSpec,
+)
+from sideboard.core.errors import UnavailableError
+
+__all__ = ["FEATURE", "Payload", "Settings", "WidgetSettings", "make_spec", "present"]
+
+
+class Settings(BaseModel):
+    """Validated instance settings. Unknown keys are rejected, not ignored."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    message: str = "hello"
+    # Optional cadence overrides. The host reads these when they are present.
+    active_seconds: float | None = None
+    ambient_seconds: float | None = None
+    background_seconds: float | None = None
+
+
+class WidgetSettings(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    limit: int = 5
+
+
+class Payload(SourcePayload):
+    """Immutable, versioned payload. Add domain fields here."""
+
+    message: str = ""
+    observed_at: datetime | None = None
+
+
+class {{CLASS}}Provider:
+    """One bounded acquisition. Rules worth repeating:
+
+    * raise a typed error from ``core.errors`` instead of returning partial nonsense
+    * return the *same payload object* when a conditional request returns 304
+    * never start your own timer, thread or repeating task
+    * keep every request, response and result bounded
+    """
+
+    def __init__(self, *, settings: Settings) -> None:
+        self.settings = settings
+
+    async def fetch(self, context: ProviderBuild) -> Payload:
+        settings = context.settings
+        assert isinstance(settings, Settings)
+        if not settings.message:
+            raise UnavailableError("message is empty", setup="{{NAMESPACE}}.file")
+        now = context.clock.now()
+        return Payload(
+            message=settings.message,
+            observed_at=now,
+            as_of=now,
+            precision=Precision.INSTANT,
+            valid_until=now + timedelta(minutes=30),
+            provenance="{{FEATURE_ID}}-template",
+            coverage=Coverage(notes="template payload"),
+        )
+
+    async def aclose(self) -> None:
+        return None
+
+
+def _settings(build: ProviderBuild) -> Settings:
+    settings = build.settings
+    assert isinstance(settings, Settings)
+    return settings
+
+
+def present(inputs: PresentInput) -> ViewModel:
+    """Pure presentation. No I/O, no clock, no database, no process."""
+    settings = inputs.settings
+    assert isinstance(settings, WidgetSettings)
+    envelope = inputs.envelope("primary")
+    payload = envelope.payload if envelope is not None else None
+    if not isinstance(payload, Payload):
+        return ViewModel(
+            title="{{TITLE}}",
+            status=StatusView(
+                severity=Severity.INFO,
+                headline="No data yet",
+                detail="Waiting for the first successful refresh.",
+            ),
+        )
+    observed = payload.observed_at.isoformat() if payload.observed_at else "never"
+    return ViewModel(
+        title="{{TITLE}}",
+        items=tuple(
+            Item(id=f"{{FEATURE_ID}}:{index}", title=f"{payload.message} #{index}")
+            for index in range(settings.limit)
+        ),
+        footnote=f"observed {observed}",
+    )
+
+
+def demo_payload() -> SourcePayload:
+    """Synthetic data for ``--demo``. Must not perform I/O."""
+    now = datetime.now(UTC)
+    return Payload(
+        message="template demo",
+        observed_at=now,
+        as_of=now,
+        precision=Precision.INSTANT,
+        provenance="demo",
+        coverage=Coverage(notes="synthetic template payload"),
+    )
+
+
+def make_spec() -> SourceSpec:
+    return SourceSpec(
+        type_id="{{NAMESPACE}}.file",
+        payload_model=Payload,
+        settings_model=Settings,
+        payload_schema="{{NAMESPACE}}.file",
+        payload_schema_version=1,
+        factory=lambda build: {{CLASS}}Provider(settings=_settings(build)),
+        capabilities=frozenset(),
+        cadence=Cadence(active_seconds=300, ambient_seconds=300, background_seconds=900),
+        retention_seconds=24 * 3600,
+        description="Template source. Replace with a real bounded acquisition.",
+        demo_builder=demo_payload,
+    )
+
+
+WIDGET = WidgetSpec(
+    type_id="{{NAMESPACE}}.list",
+    settings_model=WidgetSettings,
+    inputs=(InputBinding(name="primary", accepts=frozenset({"{{NAMESPACE}}.file"})),),
+    present=present,
+    description="Template widget.",
+    default_category="infrastructure",
+    min_width=24,
+    min_height=3,
+)
+
+FEATURE = FeatureSpec(
+    id="{{FEATURE_ID}}",
+    sources=(make_spec(),),
+    widgets=(WIDGET,),
+    description="{{TITLE}} template feature.",
+)
