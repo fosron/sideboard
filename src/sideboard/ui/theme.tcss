@@ -1,0 +1,176 @@
+/* Sideboard — semantic tokens only. No feature colours in core styles. */
+
+Screen {
+    background: $background;
+    color: $foreground;
+}
+
+#sb-tabbar {
+    height: 1;
+    background: $background;
+    color: $sb-dim;
+    padding: 0 1;
+}
+
+#sb-body {
+    height: 1fr;
+}
+
+#sb-footer {
+    height: 1;
+    background: $background;
+    color: $sb-dim;
+    padding: 0 1;
+}
+
+TabbedContent {
+    height: 1fr;
+}
+
+Tabs {
+    height: 1;
+    background: $background;
+}
+
+Tab {
+    color: $sb-dim;
+    padding: 0 2;
+    background: $background;
+}
+
+Tab.-active {
+    color: $foreground;
+    text-style: bold;
+}
+
+TabbedContent > ContentSwitcher {
+    background: $background;
+}
+
+TabPane {
+    padding: 0;
+    background: $background;
+}
+
+/* ---------------------------------------------------------------- card shell */
+
+CardShell {
+    border: round $sb-border;
+    background: $surface;
+    padding: 0 1;
+    height: 1fr;
+    width: 1fr;
+}
+
+CardShell:focus {
+    border: round $sb-border-focus;
+}
+
+CardShell.sb-held {
+    border: round $sb-held;
+}
+
+CardShell.sb-selected {
+    border: heavy $sb-border-focus;
+}
+
+CardShell.sb-pinned {
+    border: round $sb-held;
+}
+
+CardShell.sb-slot {
+    height: 1fr;
+}
+
+CardShell.sb-minimal {
+    border: none;
+    padding: 0;
+}
+
+CardShell > .sb-card-body {
+    height: 1fr;
+}
+
+/* ------------------------------------------------------------------ overview */
+
+#sb-overview-grid {
+    height: 1fr;
+}
+
+.sb-overview-row {
+    height: 1fr;
+}
+
+/* -------------------------------------------------------------------- layout */
+
+.sb-stack {
+    height: 1fr;
+}
+
+.sb-stack > CardShell {
+    margin-bottom: 0;
+}
+
+.sb-grid {
+    height: 1fr;
+}
+
+.sb-compact-status {
+    padding: 1 2;
+    color: $sb-dim;
+}
+
+DataTable {
+    background: $surface;
+}
+
+DataTable > .datatable--header {
+    background: $panel;
+    color: $sb-dim;
+    text-style: bold;
+}
+
+DataTable > .datatable--cursor {
+    background: $boost;
+}
+
+DataTable > .datatable--hover {
+    background: $boost;
+}
+
+Footer {
+    background: $background;
+    color: $sb-dim;
+}
+
+ModalScreen {
+    background: $background 60%;
+}
+
+#sb-detail {
+    border: round $sb-border-focus;
+    background: $surface;
+    padding: 1 2;
+    height: 80%;
+    width: 90%;
+}
+
+#sb-help {
+    border: round $sb-border;
+    background: $surface;
+    padding: 1 2;
+    height: auto;
+    max-height: 80%;
+    width: 80%;
+}
+
+/* ------------------------------------------------------------------- mouse map */
+
+DiagnosticScreen {
+    background: $background;
+}
+
+.mouse-cell {
+    border: round $sb-border;
+    padding: 1 2;
+}
