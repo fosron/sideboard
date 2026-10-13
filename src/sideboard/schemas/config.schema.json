@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sideboard.local/schemas/config.schema.json",
+  "title": "Sideboard configuration",
+  "description": "Generated from the registered feature schemas; this file is documentation and tooling support, not a second source of truth. `sideboard config validate` performs the authoritative cross-reference checks (registered type ids, bindings, payload schemas, categories and tabs).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["config_version"],
+  "properties": {
+    "config_version": {
+      "const": 1,
+      "description": "Schema version of this document."
+    },
+    "app": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "timezone": {
+          "type": "string",
+          "description": "IANA timezone used only for display. It never selects a location."
+        },
+        "base_currency": { "type": "string", "minLength": 3, "maxLength": 3 },
+        "privacy_mode": { "type": "boolean" },
+        "mouse": { "type": "boolean" },
+        "compact_threshold_columns": { "type": "integer", "minimum": 20 },
+        "min_columns": { "type": "integer", "minimum": 20 },
+        "min_rows": { "type": "integer", "minimum": 8 }
+      }
+    },
+    "categories": {
+      "type": "object",
+      "description": "Open string IDs. A category is metadata for filtering and digest selection, not a tab.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label"],
+        "properties": {
+          "label": { "type": "string", "minLength": 1 },
+          "order": { "type": "integer" },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "sources": {
+      "type": "object",
+      "description": "ID-indexed source instances. Each instance is one collection/cache identity; a disabled instance performs no I/O. `type` must be a registered type listed by `sideboard features list`.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type"],
+        "properties": {
+          "type": { "type": "string", "pattern": "^[a-z0-9_]+\\.[a-z0-9_]+$" },
+          "enabled": { "type": "boolean" },
+          "active_seconds": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+          "ambient_seconds": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+          "background_seconds": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+          "retention_seconds": { "type": ["integer", "null"], "minimum": 0 },
+          "settings": {
+            "type": "object",
+            "description": "Validated against the settings model of the selected source type."
+          }
+        }
+      }
+    },
+    "widgets": {
+      "type": "object",
+      "description": "ID-indexed widget instances. `sources` maps a declared input binding to a configured source instance id. Widgets own no polling timer.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type"],
+        "properties": {
+          "type": { "type": "string", "pattern": "^[a-z0-9_]+\\.[a-z0-9_]+$" },
+          "enabled": { "type": "boolean" },
+          "sources": { "type": "object", "additionalProperties": { "type": "string" } },
+          "category": { "type": ["string", "null"] },
+          "title": { "type": ["string", "null"] },
+          "settings": { "type": "object" }
+        }
+      }
+    },
+    "tabs": {
+      "type": "array",
+      "description": "Ordered list: replacing it replaces the previous tabs atomically rather than appending. Tab ids are open strings.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "label"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$" },
+          "label": { "type": "string", "minLength": 1 },
+          "layout": {
+            "enum": ["stack", "detail", "grid", "filterable", "rotating_grid"]
+          },
+          "widgets": { "type": "array", "items": { "type": "string" } },
+          "visible": { "type": "boolean" },
+          "category_filter": { "type": ["string", "null"] },
+          "settings": { "type": "object" }
+        }
+      }
+    },
+    "overview": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rotation_enabled": { "type": "boolean" },
+        "hover_pause": { "type": "boolean" },
+        "keyboard_hold_seconds": { "type": "number", "exclusiveMinimum": 0 },
+        "resume_grace_seconds": { "type": "number", "minimum": 0 },
+        "slots": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "widgets": { "type": "array", "items": { "type": "string" } },
+              "pinned": { "type": "boolean" },
+              "dwell_seconds": { "type": "number", "exclusiveMinimum": 0 },
+              "label": { "type": ["string", "null"] }
+            }
+          }
+        }
+      }
+    }
+  }
+}

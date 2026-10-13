@@ -1,0 +1,505 @@
+# Sideboard — shipped default configuration.
+#
+# This file is the composition layer: it selects *registered* types and validated
+# settings. It never names a Python import path, an expression or a shell command.
+#
+# Adding a tab, a category, a queue position or a second city is a configuration-only
+# change. Everything listed here was resolved from the registered feature specs at
+# `sideboard init` time; `sideboard config validate` re-checks it.
+#
+# Copy it to ~/.config/sideboard/config.toml and edit there:
+#   uv run sideboard init
+
+config_version = 1
+
+[app]
+# Display preference only. It is never used to guess a location.
+timezone = "Europe/Vilnius"
+base_currency = "EUR"
+privacy_mode = false
+mouse = true
+compact_threshold_columns = 70
+min_columns = 60
+min_rows = 20
+
+# --------------------------------------------------------------------------- #
+# Categories: open string IDs used for filtering and digest selection.
+# A category is not a tab, and a tab is not a category.
+# --------------------------------------------------------------------------- #
+
+[categories.local]
+label = "Local"
+order = 10
+
+[categories.lithuania]
+label = "Lithuania"
+order = 20
+
+[categories.europe]
+label = "Europe"
+order = 30
+
+[categories.world]
+label = "World"
+order = 40
+
+[categories.business]
+label = "Business"
+order = 50
+
+[categories.personal_finance]
+label = "Personal finance"
+order = 60
+
+[categories.software]
+label = "Software"
+order = 70
+
+[categories.ai]
+label = "AI"
+order = 80
+
+[categories.gadgets]
+label = "Hardware"
+order = 90
+
+[categories.infrastructure]
+label = "Infrastructure"
+order = 100
+
+[categories.media]
+label = "Media"
+order = 110
+
+[categories.finance]
+label = "Finance"
+order = 120
+
+[categories.life]
+label = "Life"
+order = 130
+
+# --------------------------------------------------------------------------- #
+# Sources: one collection/cache identity each. One instance serves every widget
+# bound to it; two widgets never double the requests.
+# --------------------------------------------------------------------------- #
+
+[sources.mac]
+type = "mac.metrics"
+enabled = true
+[sources.mac.settings]
+active_seconds = 5
+ambient_seconds = 15
+background_seconds = 60
+volumes = ["/"]
+# Empty means documented auto-selection of the busiest active physical interface.
+# Every interface is never summed, which would count the same traffic twice.
+network_interfaces = []
+include_processes = false
+include_per_core = false
+
+[sources.docker]
+type = "docker.containers"
+# No guessed default context. Run `sideboard doctor --docker` to list local contexts
+# and pin one here. Remote (ssh://) endpoints are refused.
+enabled = false
+[sources.docker.settings]
+context = ""
+local_only = true
+stats_seconds = 15
+metadata_seconds = 30
+background_seconds = 60
+include_projects = []
+expected_running = []
+include_storage = false
+
+[sources.hn]
+type = "hackernews.stories"
+enabled = true
+[sources.hn.settings]
+lists = ["top", "new"]
+items_per_list = 30
+concurrency = 6
+include_jobs = false
+
+[sources.news]
+type = "news.feeds"
+enabled = true
+[sources.news.settings]
+active_seconds = 1200
+ambient_seconds = 1200
+background_seconds = 3600
+concurrency = 4
+max_items_per_feed = 25
+[sources.news.settings.digest]
+digest_size = 6
+max_ai_items_per_digest = 2
+max_per_source = 2
+max_age_hours = 48
+
+# Publisher feeds. `enabled = true` means the URL was reachable and parsed on
+# 2026-10-13; see docs/source-validation.md. Publisher terms still apply, and a
+# publisher may change or withdraw a feed at any time.
+[[sources.news.settings.feeds]]
+id = "atviraklaipeda"
+url = "https://www.atviraklaipeda.lt/feed/"
+category = "local"
+language = "lt"
+label = "Atvira Klaipėda"
+enabled = true
+
+[[sources.news.settings.feeds]]
+id = "lrt"
+url = "https://www.lrt.lt/?rss"
+category = "lithuania"
+language = "lt"
+label = "LRT"
+enabled = true
+
+[[sources.news.settings.feeds]]
+id = "dw"
+url = "https://rss.dw.com/rdf/rss-en-all"
+category = "europe"
+language = "en"
+label = "DW"
+enabled = true
+
+[[sources.news.settings.feeds]]
+id = "bbc-world"
+url = "https://feeds.bbci.co.uk/news/world/rss.xml"
+category = "world"
+language = "en"
+label = "BBC World"
+enabled = true
+
+[[sources.news.settings.feeds]]
+id = "bbc-business"
+url = "https://feeds.bbci.co.uk/news/business/rss.xml"
+category = "business"
+language = "en"
+label = "BBC Business"
+enabled = true
+
+[[sources.news.settings.feeds]]
+id = "laravel-news"
+url = "https://laravel-news.com/feed"
+category = "software"
+language = "en"
+label = "Laravel News"
+enabled = true
+
+[[sources.news.settings.feeds]]
+id = "changelog-news"
+url = "https://changelog.com/news/feed"
+category = "software"
+language = "en"
+label = "Changelog News"
+enabled = true
+
+[[sources.news.settings.feeds]]
+id = "pragmatic-engineer"
+url = "https://newsletter.pragmaticengineer.com/feed"
+category = "software"
+language = "en"
+label = "The Pragmatic Engineer"
+enabled = true
+
+# Candidates that were not validated. Enable them only after checking the URL and the
+# publisher's terms on your own connection.
+[[sources.news.settings.feeds]]
+id = "lt-finance-candidate"
+url = "https://www.lrt.lt/?rss"
+category = "personal_finance"
+language = "lt"
+label = "Personal finance (candidate)"
+enabled = false
+
+[sources.weather_home]
+type = "weather.forecast"
+enabled = true
+[sources.weather_home.settings]
+label = "Klaipėda"
+latitude = 55.7033
+longitude = 21.1443
+timezone = "Europe/Vilnius"
+refresh_seconds = 1200
+forecast_days = 7
+
+[sources.weather_travel]
+type = "weather.forecast"
+# A second instance of the same source type. It has its own cache identity, so the two
+# locations can never overwrite each other. Set coordinates and enable when travelling.
+enabled = false
+[sources.weather_travel.settings]
+label = "Travel"
+timezone = "Europe/Madrid"
+refresh_seconds = 1200
+forecast_days = 3
+
+[sources.youtube]
+type = "youtube.uploads"
+enabled = false
+[sources.youtube.settings]
+active_channel_limit = 12
+half_life_days = 30
+history_window_days = 90
+channels = []
+favorite_channel_ids = []
+
+[sources.reddit]
+type = "reddit.threads"
+# Link-only by default: Reddit access is conditional and must be validated first.
+enabled = true
+[sources.reddit.settings]
+mode = "links"
+communities = ["selfhosted", "homelab", "LocalLLaMA", "PHP", "eupersonalfinance", "lithuania"]
+max_items_per_community = 10
+
+[sources.holdings]
+type = "portfolio.holdings"
+enabled = true
+[sources.holdings.settings]
+mode = "manual_import"
+base_currency = "EUR"
+
+[sources.prices]
+type = "portfolio.prices"
+enabled = true
+[sources.prices.settings]
+mode = "manual_import"
+
+[sources.fx]
+type = "fx.rates"
+enabled = true
+[sources.fx.settings]
+# manual_import needs no network at all. Switch to "reference" for dated ECB rates.
+mode = "manual_import"
+provider = "frankfurter-ecb"
+base_currency = "EUR"
+currencies = ["PLN", "GBP"]
+refresh_seconds = 43200
+
+[sources.markets]
+type = "markets.quotes"
+enabled = false
+[sources.markets.settings]
+mode = "disabled"
+provider = "yahoo"
+symbol_map = {}
+refresh_seconds = 3600
+
+# A generic local producer. Point `path` at a JSON snapshot that validates against
+# src/sideboard/schemas/local-snapshot.schema.json.
+[sources.backup]
+type = "local_snapshot.file"
+enabled = false
+[sources.backup.settings]
+path = ""
+title = "Backup status"
+active_seconds = 30
+
+# --------------------------------------------------------------------------- #
+# Widgets: presentations of already-collected data. Widgets own no polling timer.
+# --------------------------------------------------------------------------- #
+
+[widgets.portfolio]
+type = "portfolio.summary"
+sources = { positions = "holdings", prices = "prices", fx = "fx" }
+category = "finance"
+[widgets.portfolio.settings]
+max_holdings = 6
+show_weights = true
+show_change = true
+concentration_instrument = ""
+
+[widgets.portfolio_holdings]
+type = "portfolio.holdings"
+sources = { positions = "holdings", prices = "prices", fx = "fx" }
+category = "finance"
+[widgets.portfolio_holdings.settings]
+limit = 20
+show_reported_values = true
+
+[widgets.portfolio_events]
+type = "portfolio.events"
+sources = { positions = "holdings" }
+category = "finance"
+
+[widgets.vercom]
+type = "portfolio.instrument"
+sources = { positions = "holdings", prices = "prices", fx = "fx" }
+category = "finance"
+title = "Vercom"
+[widgets.vercom.settings]
+# Fill this with the identifier you use for the holding (for example the one in your
+# statement). An unresolved identity never acquires a guessed quote.
+instrument_id = ""
+label = "Vercom"
+
+[widgets.fx]
+type = "fx.summary"
+sources = { primary = "fx" }
+category = "finance"
+
+[widgets.weather]
+type = "weather.summary"
+sources = { primary = "weather_home" }
+
+[widgets.weather_travel]
+type = "weather.summary"
+sources = { primary = "weather_travel" }
+title = "Travel"
+
+[widgets.news]
+type = "news.digest"
+sources = { primary = "news" }
+category = "world"
+[widgets.news.settings]
+limit = 6
+digest = true
+max_ai_items_per_digest = 2
+max_age_hours = 48
+
+[widgets.hn_top]
+type = "hackernews.list"
+sources = { primary = "hn" }
+category = "software"
+title = "HN Top"
+[widgets.hn_top.settings]
+list = "top"
+limit = 8
+
+[widgets.hn_new]
+type = "hackernews.list"
+sources = { primary = "hn" }
+category = "software"
+title = "HN New"
+[widgets.hn_new.settings]
+list = "new"
+limit = 8
+
+[widgets.youtube]
+type = "youtube.uploads"
+sources = { primary = "youtube" }
+category = "media"
+
+[widgets.reddit]
+type = "reddit.list"
+sources = { primary = "reddit" }
+category = "software"
+
+[widgets.saved]
+type = "news.saved"
+sources = {}
+category = "world"
+
+[widgets.mac_summary]
+type = "mac.summary"
+sources = { primary = "mac" }
+category = "infrastructure"
+
+[widgets.mac_details]
+type = "mac.details"
+sources = { primary = "mac" }
+category = "infrastructure"
+[widgets.mac_details.settings]
+show_per_core = true
+show_swap = true
+show_processes = false
+
+[widgets.docker_summary]
+type = "docker.summary"
+sources = { primary = "docker" }
+category = "infrastructure"
+
+[widgets.docker_containers]
+type = "docker.table"
+sources = { primary = "docker" }
+category = "infrastructure"
+[widgets.docker_containers.settings]
+group_by = "compose_project"
+sort_by = "memory_bytes"
+limit = 40
+
+[widgets.backup]
+type = "local_snapshot.metrics"
+sources = { primary = "backup" }
+category = "infrastructure"
+
+[widgets.sources]
+type = "diagnostics.sources"
+sources = {}
+category = "infrastructure"
+
+[widgets.host]
+type = "diagnostics.host"
+sources = {}
+category = "infrastructure"
+
+# --------------------------------------------------------------------------- #
+# Tabs: ordered, configuration-driven placement. Six defaults, not a limit.
+# --------------------------------------------------------------------------- #
+
+[[tabs]]
+id = "overview"
+label = "Overview"
+layout = "rotating_grid"
+widgets = []
+
+[[tabs]]
+id = "money"
+label = "Money"
+layout = "detail"
+widgets = ["portfolio", "vercom", "portfolio_holdings", "portfolio_events", "fx"]
+
+[[tabs]]
+id = "read"
+label = "Read"
+layout = "filterable"
+widgets = ["news", "hn_top", "hn_new", "reddit", "saved"]
+category_filter = "all_registered"
+
+[[tabs]]
+id = "watch"
+label = "Watch"
+layout = "detail"
+widgets = ["youtube"]
+
+[[tabs]]
+id = "life"
+label = "Life"
+layout = "grid"
+widgets = ["weather", "weather_travel"]
+
+[[tabs]]
+id = "systems"
+label = "Systems"
+layout = "stack"
+widgets = ["mac_details", "docker_containers", "backup", "sources", "host"]
+
+# --------------------------------------------------------------------------- #
+# Overview rotation.
+# --------------------------------------------------------------------------- #
+
+[overview]
+rotation_enabled = true
+hover_pause = true
+keyboard_hold_seconds = 15
+resume_grace_seconds = 2
+
+[overview.slots.a]
+# Portfolio first, Hacker News when money is unconfigured.
+widgets = ["portfolio", "hn_top"]
+pinned = true
+
+[overview.slots.b]
+widgets = ["weather", "sources"]
+pinned = true
+
+[overview.slots.c]
+widgets = ["news", "hn_top", "youtube", "hn_new"]
+dwell_seconds = 40
+
+[overview.slots.d]
+widgets = ["mac_summary", "docker_summary", "reddit", "saved", "vercom", "backup"]
+dwell_seconds = 55
