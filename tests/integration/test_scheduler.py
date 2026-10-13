@@ -432,3 +432,80 @@ async def test_persisted_envelope_round_trips_and_recomputes_freshness(tmp_path:
         assert envelope.freshness.value in {"stale", "expired"}
     finally:
         await database.aclose()
+
+
+async def test_a_slow_fetch_cannot_starve_the_event_loop(tmp_path: Path) -> None:
+    """A loop must never iterate without awaiting.
+
+    Regression test for a livelock that blocked the whole application: when an
+    acquisition was already in flight and the instance was due again (a manual refresh
+    sets that), ``_fetch_once`` returned at its guard without awaiting. The loop then
+    re-checked forever inside one event-loop step, so the in-flight request could never
+    finish — the dashboard froze and even a concurrent ``asyncio.sleep(0)`` task starved.
+    """
+    blocker = asyncio.Event()
+
+    class BlockingProvider:
+        async def fetch(self, context: ProviderBuild) -> Payload:
+            _ = context
+            await blocker.wait()
+            return Payload(value=1.0)
+
+        async def aclose(self) -> None:
+            return None
+
+    feature = FeatureSpec(
+        id="stub",
+        sources=(
+            SourceSpec(
+                type_id="stub.value",
+                payload_model=Payload,
+                settings_model=Settings,
+                payload_schema="stub.value",
+                payload_schema_version=1,
+                factory=lambda build: BlockingProvider(),
+                cadence=Cadence(active_seconds=30),
+            ),
+        ),
+        widgets=(_widget(),),
+    )
+    scheduler, database, _clock, _config = await _make(tmp_path, _document(), feature=feature)
+    try:
+        await scheduler.start({})
+        scheduler.set_active_tab("systems")
+        runtime = scheduler.runtimes["stub"]
+
+        # A concurrent acquisition holds the instance…
+        holding = asyncio.create_task(scheduler.refresh_now("stub", force=True))
+        for _ in range(10):
+            await asyncio.sleep(0)
+            if runtime.in_flight:
+                break
+        assert runtime.in_flight is True
+        # …and the instance is due again, which is what made the loop spin.
+        runtime.next_due = scheduler.clock.monotonic() - 1.0
+
+        ticks = 0
+
+        async def concurrent() -> None:
+            nonlocal ticks
+            for _ in range(20):
+                await asyncio.sleep(0)
+                ticks += 1
+
+        await asyncio.wait_for(concurrent(), timeout=2.0)
+        assert ticks == 20, "the loop must yield while another fetch is in flight"
+
+        # The request was accepted even though the concurrent attempt did the work.
+        assert await asyncio.wait_for(holding, timeout=2.0) is True
+        blocker.set()
+        for _ in range(20):
+            await asyncio.sleep(0)
+            envelope = scheduler.snapshot("stub")
+            if envelope is not None and envelope.payload is not None:
+                break
+        assert envelope is not None and envelope.payload is not None
+    finally:
+        blocker.set()
+        await scheduler.aclose()
+        await database.aclose()

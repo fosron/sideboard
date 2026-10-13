@@ -79,6 +79,10 @@ STALE_INTERVAL_FACTOR = 2.5
 DEMO_INTERVAL = 60.0
 SLEEP_GAP_SECONDS = 90.0
 IDLE_TICK = 5.0
+# How long a loop waits when another attempt for the same instance is already in
+# flight. A loop must never iterate without awaiting: an unyielding loop starves the
+# event loop and therefore starves the very fetch it is waiting for.
+SKIP_TICK = 0.5
 
 
 def map_error_categories(error: BaseException) -> tuple[Connectivity, float]:
@@ -310,6 +314,8 @@ class Scheduler:
         if not force and not self.request_refresh(source_id):
             return False
         runtime.refresh_requested = False
+        # Whether this call or a concurrent one performs the acquisition, the refresh
+        # request itself was accepted.
         await self._fetch_once(runtime, manual=True)
         return True
 
@@ -495,7 +501,11 @@ class Scheduler:
                 if wait > 0:
                     await self.clock.sleep(min(wait, IDLE_TICK))
                     continue
-                await self._fetch_once(runtime)
+                if not await self._fetch_once(runtime):
+                    # Another attempt for this instance is already running (a manual
+                    # refresh, an import update, or a previous slow acquisition). Yield
+                    # before re-checking: the in-flight attempt owns the reschedule.
+                    await self.clock.sleep(SKIP_TICK)
         except asyncio.CancelledError:
             self._release_task(runtime)
             raise
@@ -521,17 +531,23 @@ class Scheduler:
             runtime.wake_reset_pending = True
             runtime.next_due = min(runtime.next_due, now + runtime.random.uniform(0.0, 5.0))
 
-    async def _fetch_once(self, runtime: SourceRuntime, *, manual: bool = False) -> None:
+    async def _fetch_once(self, runtime: SourceRuntime, *, manual: bool = False) -> bool:
+        """Run one acquisition if nothing else is already running for this instance.
+
+        Returns whether this call performed the attempt. A ``False`` result means a
+        concurrent acquisition owns the instance and is responsible for rescheduling it,
+        and the caller must yield rather than re-check in a tight loop.
+        """
         if runtime.in_flight:
-            return
+            return False
         if runtime.interval is None and not manual:
-            return
+            return False
         if runtime.demand is Demand.NONE and not manual:
             runtime.next_due = self.clock.monotonic() + IDLE_TICK
-            return
+            return False
         async with runtime.lock:
             if runtime.in_flight:
-                return
+                return False
             runtime.in_flight = True
             generation = runtime.generation
             started = self.clock.monotonic()
@@ -541,6 +557,7 @@ class Scheduler:
                 runtime.in_flight = False
                 runtime.last_duration = self.clock.monotonic() - started
                 self.notify(runtime.source_id)
+        return True
 
     async def _attempt(self, runtime: SourceRuntime, generation: int) -> None:
         now_mono = self.clock.monotonic()
