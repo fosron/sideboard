@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "source_id": "example-backup",
+  "generated_at": "2026-10-13T10:00:00Z",
+  "metrics": [
+    {"id": "last_success", "label": "Last successful backup", "va

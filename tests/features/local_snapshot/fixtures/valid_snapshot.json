@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "source_id": "example-backup",
+  "generated_at": "2026-10-13T10:00:00Z",
+  "expires_at": "2026-10-13T14:00:00Z",
+  "privacy": "private",
+  "title": "Example backup status",
+  "metrics": [
+    {
+      "id": "last_success",
+      "label": "Last successful backup",
+      "value": "2026-10-13T09:45:00Z",
+      "unit": "timestamp",
+      "basis": "measured"
+    },
+    {
+      "id": "duration_seconds",
+      "label": "Duration",
+      "value": 42.5,
+      "unit": "s",
+      "basis": "measured",
+      "history": [38.0, 40.5, null, 44.0, 42.5]
+    },
+    {
+      "id": "verified",
+      "label": "Restore verified",
+      "value": true,
+      "basis": "producer"
+    },
+    {
+      "id": "note",
+      "label": "Note",
+      "value": "synthetic fixture, not a real backup",
+      "unit": "",
+      "basis": ""
+    }
+  ],
+  "items": [
+    {
+      "id": "run-001",
+      "title": "Synthetic backup run 001",
+      "url": "https://example.invalid/backup/run-001",
+      "subtitle": "example.invalid · synthetic",
+      "published_at": "2026-10-13T09:45:00Z"
+    },
+    {
+      "id": "run-000",
+      "title": "Synthetic backup run 000 (no link)",
+      "subtitle": "synthetic fixture"
+    }
+  ]
+}

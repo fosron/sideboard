@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "source_id": "example-backup",
+  "privacy": "private",
+  "metrics": [
+    {
+      "id": "last_success",
+      "label": "Last successful backup",
+      "value": "2026-10-13T09:45:00Z",
+      "unit": "timestamp",
+      "basis": "measured"
+    }
+  ],
+  "items": [
+    {
+      "id": "run-001",
+      "title": "Synthetic item with a forbidden link scheme",
+      "url": "javascript:alert(1)"
+    }
+  ]
+}

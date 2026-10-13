@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sideboard.local/schemas/local-snapshot.schema.json",
+  "title": "Sideboard local snapshot",
+  "description": "A producer-written JSON snapshot consumed by the generic Sideboard local_snapshot feature. Producers should write a temporary file and rename it atomically; consumers reject partial or invalid updates and keep the last good snapshot. Files are limited to 1 MiB and must be explicitly configured regular-file paths.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "source_id", "generated_at"],
+  "properties": {
+    "schema_version": {
+      "description": "Format version. Must be 1.",
+      "const": 1,
+      "type": "integer"
+    },
+    "source_id": {
+      "description": "Producer's own stable identifier for this snapshot stream.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "generated_at": {
+      "description": "When the producer generated the snapshot. ISO 8601 with a timezone offset; naive local timestamps are rejected.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "expires_at": {
+      "description": "Optional producer validity horizon. A value in the past is allowed: the data is marked stale/expired and still shown.",
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "privacy": {
+      "description": "Default private. Private snapshots are masked in privacy mode. Omit the key for the default; null is rejected.",
+      "type": "string",
+      "enum": ["public", "private"],
+      "default": "private"
+    },
+    "title": {
+      "description": "Optional card title.",
+      "type": ["string", "null"],
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "metrics": {
+      "description": "Bounded list of scalar metrics. Unknown extra keys are rejected; null is rejected (omit the key instead).",
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "label", "value"],
+        "properties": {
+          "id": {
+            "description": "Stable metric id.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+          },
+          "label": {
+            "description": "Human label. No newlines or control characters.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "value": {
+            "description": "Scalar value. Strings must not contain newlines or control characters; numbers must be finite.",
+            "type": ["string", "number", "boolean"]
+          },
+          "unit": {
+            "description": "Unit of the value, for example s, GB, timestamp. Use \"\" when the value has no unit; null is rejected.",
+            "type": "string",
+            "maxLength": 24
+          },
+          "basis": {
+            "description": "How the value was obtained, for example measured, estimated, producer. Use \"\" when unknown; null is rejected.",
+            "type": "string",
+            "maxLength": 64
+          },
+          "history": {
+            "description": "Bounded, oldest-first numeric history for a sparkline. null entries are gaps and are preserved as gaps; the file supplies no per-sample timestamps.",
+            "type": "array",
+            "maxItems": 5000,
+            "items": {
+              "type": ["number", "null"]
+            }
+          }
+        }
+      }
+    },
+    "items": {
+      "description": "Bounded short list with stable ids and optional HTTP(S) links. null is rejected (omit the key instead).",
+      "type": "array",
+      "maxItems": 500,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title"],
+        "properties": {
+          "id": {
+            "description": "Stable item id.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+          },
+          "title": {
+            "description": "Item title. No newlines or control characters.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "url": {
+            "description": "Optional absolute http(s) link. Other schemes are rejected.",
+            "type": ["string", "null"],
+            "maxLength": 512,
+            "pattern": "^https?://"
+          },
+          "subtitle": {
+            "description": "Optional short subtitle.",
+            "type": ["string", "null"],
+            "maxLength": 200
+          },
+          "published_at": {
+            "description": "Optional ISO 8601 timestamp with a timezone offset.",
+            "type": ["string", "null"],
+            "format": "date-time"
+          }
+        }
+      }
+    }
+  }
+}
