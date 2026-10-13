@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <updated>2026-10-13T11:00:00+00:00</updated>
+  <id>https://www.reddit.com/r/homelab/top/.rss?t=day</id>
+  <link href="https://www.reddit.com/r/homelab/top/.rss?t=day" rel="self"/>
+  <title>reddit.com: top posts in r/homelab</title>
+  <entry>
+    <author><name>/u/example_author</name></author>
+    <category term="homelab" label="r/homelab"/>
+    <content type="html">&lt;p&gt;Synthetic homelab fixture entry.&lt;/p&gt;</content>
+    <id>t3_lab001</id>
+    <link href="https://www.reddit.com/r/homelab/comments/lab001/rack_rails/"/>
+    <updated>2026-10-13T11:00:00+00:00</updated>
+    <published>2026-10-13T11:00:00+00:00</published>
+    <title>Synthetic fixture: rack rails that fit</title>
+  </entry>
+  <entry>
+    <category term="homelab" label="r/homelab"/>
+    <summary>Synthetic entry with no author element at all.</summary>
+    <id>t3_lab002</id>
+    <link href="https://www.reddit.com/r/homelab/comments/lab002/switch_fans/"/>
+    <updated>2026-10-13T09:20:00+00:00</updated>
+    <published>2026-10-13T09:20:00+00:00</published>
+    <title>Synthetic fixture: quieter switch fans</title>
+  </entry>
+</feed>

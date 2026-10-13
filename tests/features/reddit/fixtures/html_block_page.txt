@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="en">
+  <head><title>Blocked</title></head>
+  <body>
+    <h1>This is a synthetic fixture of an HTML error page, not a feed.</h1>
+    <p>A producer that returns HTML with a 200 status is a parse failure, never data.</p>
+  </body>
+</html>

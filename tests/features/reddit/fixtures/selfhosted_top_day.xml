@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/">
+  <category term="selfhosted" label="r/selfhosted"/>
+  <updated>2026-10-13T10:31:00+00:00</updated>
+  <id>https://www.reddit.com/r/selfhosted/top/.rss?t=day</id>
+  <link href="https://www.reddit.com/r/selfhosted/top/.rss?t=day" rel="self"/>
+  <title>reddit.com: top posts in r/selfhosted</title>
+  <entry>
+    <author><name>/u/example_author</name><uri>https://www.reddit.com/user/example_author</uri></author>
+    <category term="selfhosted" label="r/selfhosted"/>
+    <content type="html">&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;a href="https://www.reddit.com/r/selfhosted/comments/demo001/backup_strategy/"&gt;[link]&lt;/a&gt;&lt;/td&gt;&lt;td&gt;submitted by &lt;a href="https://www.reddit.com/user/example_author"&gt;/u/example_author&lt;/a&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;</content>
+    <id>t3_demo001</id>
+    <link href="https://www.reddit.com/r/selfhosted/comments/demo001/backup_strategy/"/>
+    <updated>2026-10-13T10:05:00+00:00</updated>
+    <published>2026-10-13T09:55:00+00:00</published>
+    <title>Backup strategy that survived a disk failure &amp; a move</title>
+  </entry>
+  <entry>
+    <author><name>/u/example_author</name><uri>https://www.reddit.com/user/example_author</uri></author>
+    <category term="selfhosted" label="r/selfhosted"/>
+    <content type="html">&lt;p&gt;Synthetic fixture summary that is deliberately long so the provider has to truncate it to the documented 240 character limit. It keeps going with plain text about rack rails, network switches, backup verification and a power budget, because the point of this entry is to prove that a long producer-provided excerpt is bounded before it reaches a renderer. Padding padding padding.&lt;/p&gt;</content>
+    <id>t3_demo002</id>
+    <link href="https://www.reddit.com/r/selfhosted/comments/demo002/power_budget/"/>
+    <updated>2026-10-13T10:30:00+00:00</updated>
+    <published>2026-10-13T10:30:00+00:00</published>
+    <title>Synthetic fixture: a very small homelab power budget</title>
+  </entry>
+  <entry>
+    <category term="selfhosted" label="r/selfhosted"/>
+    <summary>A short summary without markup.</summary>
+    <id>t3_demo003</id>
+    <link href="https://www.reddit.com/r/selfhosted/comments/demo003/updated_only/"/>
+    <updated>2026-10-13T08:00:00+00:00</updated>
+    <title>Synthetic fixture without a published timestamp</title>
+  </entry>
+</feed>
