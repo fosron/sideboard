@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015"
+      xmlns:media="http://search.yahoo.com/mrss/"
+      xmlns="http://www.w3.org/2005/Atom">
+  <link rel="self" href="https://www.youtube.com/feeds/videos.xml?channel_id=UCaaaa0000000000000000aa"/>
+  <id>yt:channel:UCaaaa0000000000000000aa</id>
+  <yt:channelId>UCaaaa0000000000000000aa</yt:channelId>
+  <title>Alpha Synthetic Channel</title>
+  <link rel="alternate" href="https://www.youtube.com/channel/UCaaaa0000000000000000aa"/>
+  <entry>
+    <id>yt:video:vid-alpha-1</id>
+    <yt:videoId>vid-alpha-1</yt:videoId>
+    <yt:channelId>UCaaaa0000000000000000aa</yt:channelId>
+    <title>Alpha Video One</title>
+    <link rel="alternate" href="https://www.youtube.com/watch?v=vid-alpha-1"/>
+    <published>2026-10-10T09:00:00+00:00</published>
+    <updated>2026-10-10T10:00:00+00:00</updated>
+  </entry>
+  <entry>
+    <id>yt:video:vid-alpha-2</id>
+    <yt:videoId>vid-alpha-2</yt:videoId>
+    <yt:channelId>UCaaaa0000000000000000aa</yt:channelId>
+    <title>Alpha Video Two</title>
+    <link rel="alternate" href="https://www.youtube.com/watch?v=vid-alpha-2"/>
+    <published>2026-10-05T07:30:00+00:00</published>
+    <updated>2026-10-05T08:00:00+00:00</updated>
+  </entry>
+</feed>
