@@ -1,0 +1,94 @@
+{
+  "101": {
+    "id": 101,
+    "type": "story",
+    "by": "ada",
+    "title": "Synthetic top story one",
+    "url": "https://example.com/one",
+    "score": 120,
+    "descendants": 40,
+    "time": 1791882000
+  },
+  "102": {
+    "id": 102,
+    "type": "story",
+    "by": "bob",
+    "title": "Synthetic top story two",
+    "url": "https://example.com/two",
+    "score": 15,
+    "descendants": 3,
+    "time": 1791874800
+  },
+  "103": {
+    "id": 103,
+    "type": "story",
+    "by": "cleo",
+    "title": "Synthetic top story without a URL",
+    "score": 7,
+    "descendants": 1,
+    "time": 1791867600
+  },
+  "104": {
+    "id": 104,
+    "type": "story",
+    "by": "dan",
+    "title": "Synthetic dead story",
+    "url": "https://example.com/dead",
+    "score": 9,
+    "time": 1791889200,
+    "dead": true
+  },
+  "105": {
+    "id": 105,
+    "type": "story",
+    "by": "eve",
+    "title": "Synthetic deleted story",
+    "time": 1791889200,
+    "deleted": true
+  },
+  "106": {
+    "id": 106,
+    "type": "job",
+    "by": "frank",
+    "title": "Synthetic job posting",
+    "url": "https://example.com/jobs",
+    "time": 1791889200
+  },
+  "201": {
+    "id": 201,
+    "type": "story",
+    "by": "gina",
+    "title": "Synthetic new story one",
+    "url": "https://example.com/new-one",
+    "score": 1,
+    "time": 1791892200
+  },
+  "202": {
+    "id": 202,
+    "type": "story",
+    "by": "hugo",
+    "title": "Synthetic new story without a score",
+    "url": "https://example.com/new-two",
+    "time": 1791892500
+  },
+  "301": {
+    "id": 301,
+    "type": "story",
+    "by": "iris",
+    "title": "Ask HN: synthetic question",
+    "score": 22,
+    "descendants": 5,
+    "time": 1791885600,
+    "text": "<p>Hello <b>&amp; welcome</b> to the synthetic demo question. This text exists only so the collector can prove that it reduces markup to plain text and truncates the result at three hundred characters.</p><p>Padding so the excerpt is definitely longer than the limit: alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec romeo sierra tango uniform victor whiskey xray yankee zulu.</p>"
+  },
+  "401": {
+    "id": 401,
+    "type": "story",
+    "by": "jane",
+    "title": "Show HN: synthetic project",
+    "url": "https://example.com/show",
+    "score": 55,
+    "descendants": 12,
+    "time": 1791871200
+  }
+}
