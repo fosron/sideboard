@@ -52,7 +52,7 @@ applications. Price-bot, Spanish-learning and habit widgets are excluded by desi
 
 ## Verified state
 
-* `uv run pytest` — 389 offline tests, including the extension smoke test
+* `uv run pytest` — 400 offline tests, including the extension smoke test and rendered-screen tests
 * `uv run pytest -m live` — 4 explicit public-network probes (deselected by default)
 * `uv run ruff check .`, `uv run ruff format --check .`, `uv run pyright` — clean
 * Real Docker smoke test against a pinned local `orbstack` socket: engine identity,
@@ -61,9 +61,10 @@ applications. Price-bot, Spanish-learning and habit widgets are excluded by desi
 * Real-terminal smoke test under a pseudo-terminal: chrome, all six tabs, a full modal
   screen and demo collection, with a clean exit and no stylesheet or Rich errors.
   Interactive hover still needs a human at the keyboard; see `docs/setup.md`.
-* Four defects were found only by these real smoke tests (nested Docker endpoint shape,
-  a backslash-escaped CLI template, an absent `State.Health` field, and a missing
-  migration); all four now have regression tests — see `docs/source-validation.md`.
+* Six defects were found only by these real smoke tests (nested Docker endpoint shape, a
+  backslash-escaped CLI template, an absent `State.Health` field, a missing migration,
+  a zero-height tab body, and a filter bar that ate the whole tab); all six now have
+  regression tests — see `docs/source-validation.md`.
 
 ## Repository map
 

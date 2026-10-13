@@ -86,6 +86,22 @@ now covered by regression tests:
    runs templates with `missingkey=error`, which aborted the whole inspect call. The
    template now uses `index .State "Health"`, which yields the zero value instead.
 
+A fifth and sixth defect were found by an actual terminal run, and one of them is why
+"nothing worked" on first use:
+
+5. The tab body chain (`TabbedContent` → `ContentSwitcher` → `TabPane` → pane) had no
+   height anywhere. Textual defaults all three to `height: auto`, and an `auto`
+   container cannot give a `1fr` child space, so **every card was laid out at height 0**:
+   the user saw tab titles, card border titles and the footer, and no widget content.
+6. On the Read tab the unconstrained filter bar claimed the entire tab, leaving the
+   card at height 0.
+
+`tests/ui/test_rendering.py` now reads back the *composited screen text* (through
+Textual's SVG export, because `Screen.render_line` only renders the screen widget
+itself) and asserts real values on screen, positive card heights at every target size,
+and that a tall tab scrolls to reach its later cards. Asserting `card.view` was never
+enough, and that is exactly what the earlier test suites did.
+
 A fourth defect was found by running the CLI on a fresh database: no migration created
 the `fx_rates` table, so `import fx` only worked where the table had been created by
 hand. `tests/contracts/test_migrations.py` now asserts that every table a repository

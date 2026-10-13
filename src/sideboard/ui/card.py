@@ -191,6 +191,32 @@ class CardShell(Widget, can_focus=True):
             self._signature = signature
             self.refresh(layout=True)
 
+    def estimated_content_rows(self) -> int:
+        """Rows this card's current view needs, for a scrollable stack of cards.
+
+        The estimate is deliberately simple: it decides a *height*, and the renderers
+        still truncate whatever does not fit. It is stable for the same view, so a card
+        does not oscillate between two heights.
+        """
+        view = self.view
+        if view is None:
+            return self._min_height
+        width = self.content_size.width or self.size.width or 60
+        columns = 3 if width >= 96 else 2
+        rows = 0
+        if view.status is not None:
+            rows += 3
+        if view.metrics:
+            rows += (len(view.metrics) + columns - 1) // columns
+        rows += len(view.series)
+        if view.items:
+            rows += min(len(view.items) * 2, 40)
+        if view.table is not None and view.table.rows:
+            rows += len(view.table.rows) + 2
+        if view.footnote:
+            rows += 1
+        return max(3, rows)
+
     def _apply_chrome(self) -> None:
         marker = "◆ " if self.is_pinned else ""
         label = f"{marker}{control_free(self.card_title) or 'card'}"
@@ -342,8 +368,15 @@ class CardShell(Widget, can_focus=True):
     # ------------------------------------------------------------------ render
 
     def render(self) -> RenderableType:
-        width = max(8, self.size.width - 2)
-        height = max(1, self.size.height)
+        # ``content_size`` is the region available inside the border and padding, which
+        # is what a renderable is drawn into. A zero-height region means the layout has
+        # not given this card any space yet: render nothing rather than a clipped line,
+        # and let the next layout pass drive a real render.
+        content = self.content_size
+        height = content.height
+        width = max(8, content.width)
+        if height <= 0 or self.size.height <= 2:
+            return Text("")
         view = self.view
         if view is None:
             return Text("loading…", style=DIM)

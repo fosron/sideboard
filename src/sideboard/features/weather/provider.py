@@ -413,8 +413,14 @@ def _as_time(value: Any, zone: ZoneInfo) -> datetime | None:
 
 
 def demo_builder() -> WeatherPayload:
-    """Synthetic forecast for ``--demo``: no network, obviously not real data."""
-    now = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
+    """Synthetic forecast for ``--demo``: no network, obviously not real data.
+
+    The hourly grid is aligned to the hour, but the payload is *issued* now, so a demo
+    card reads `fresh` rather than `expired` (the real provider issues relative to its
+    own fetch time in the same way).
+    """
+    issued = datetime.now(UTC)
+    now = issued.replace(minute=0, second=0, microsecond=0)
     hourly = tuple(
         HourlyPoint(
             at=now + timedelta(hours=offset),
@@ -456,7 +462,8 @@ def demo_builder() -> WeatherPayload:
         daily=daily,
         as_of=now,
         precision=Precision.INSTANT,
-        valid_until=now + timedelta(seconds=VALID_FOR_SECONDS),
+        # Issued now, not at the start of the hour it was truncated to.
+        valid_until=issued + timedelta(seconds=VALID_FOR_SECONDS),
         provenance="demo (synthetic)",
         coverage=Coverage(notes="synthetic demo payload; not a real forecast"),
         model_note="synthetic demo data, not a forecast",

@@ -23,7 +23,7 @@ from ...core.contracts import (
     StatusView,
     TableView,
 )
-from ..styles import BORDER, BORDER_FOCUS, DIM, INFO, READ, VALUE, WARN
+from ..styles import BORDER, BORDER_FOCUS, DIM, INFO, ITEM, READ, VALUE, WARN
 from ..text import SEVERITY_STYLE, control_free, single_line
 
 __all__ = [
@@ -90,7 +90,7 @@ def render_metrics(
 
 
 def render_status(status: StatusView, *, width: int) -> RenderableType:
-    style = SEVERITY_STYLE.get(status.severity, "sb-dim")
+    style = SEVERITY_STYLE.get(status.severity, DIM)
     parts: list[Text] = []
     headline = Text()
     headline.append(f"{status.severity.value.upper()}  ", style=style)
@@ -134,7 +134,7 @@ def render_items(
             line.append("  ")
         line.append("◆ " if raw.saved else "  ", style=WARN)
         hide = privacy and raw.privacy is Privacy.PRIVATE
-        style = "sb-read" if raw.read else "sb-item"
+        style = READ if raw.read else ITEM
         title_room = max(12, width - 6)
         line.append(single_line(raw.title, title_room), style=style)
         if raw.badge:
@@ -157,7 +157,7 @@ def render_items(
         more = Text(f"  +{extra} more", style=DIM)
         rows.append(more)
     if selected_index >= limit and rows:
-        rows[-1].style = "sb-border-focus"
+        rows[-1].style = BORDER_FOCUS
     return Group(*rows)
 
 
@@ -235,7 +235,7 @@ def _add_row(
         cells.append(text)
     prefix = "›" if index == selected_index else " "
     cells[0] = Text.assemble(Text(prefix + " "), cells[0])
-    table.add_row(*cells, style=READ if index != selected_index else "sb-value")
+    table.add_row(*cells, style=READ if index != selected_index else VALUE)
 
 
 _SPARK = "▁▂▃▄▅▆▇█"

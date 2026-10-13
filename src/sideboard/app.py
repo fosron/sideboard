@@ -285,7 +285,7 @@ class SideboardApp(App[None]):
             pane = TabPane(tab.label, id=f"tab-{tab.id}")
             await content.add_pane(pane)
             if self._is_overview(tab.id):
-                overview = OverviewPane(id=f"sb-pane-{tab.id}")
+                overview = OverviewPane(id=f"sb-pane-{tab.id}", classes="sb-pane")
                 await pane.mount(overview)
                 self._overview = overview
             else:
@@ -293,7 +293,7 @@ class SideboardApp(App[None]):
                     bar = FilterBar(filters=self._filters_for(tab.id), id=f"sb-filter-{tab.id}")
                     self._filter_bars[tab.id] = bar
                     await pane.mount(bar)
-                detail = DetailPane(id=f"sb-detail-{tab.id}")
+                detail = DetailPane(id=f"sb-detail-{tab.id}", classes="sb-pane")
                 await pane.mount(detail)
                 await detail.rebuild(self._tab_widgets(tab.id), tab.layout, labels=self._labels())
                 self._detail_panes[tab.id] = detail
@@ -597,6 +597,9 @@ class SideboardApp(App[None]):
             card = pane.card(widget_id)
             if card is not None:
                 self._present_card(card, widget_id, mode=ViewMode.COMPACT)
+        # Heights follow the data: a card showing a long table grows, and the pane
+        # scrolls instead of clipping it.
+        pane.apply_heights()
 
     async def _rebuild_filter_pane(self, tab_id: str) -> None:
         pane = self._detail_panes.get(tab_id)

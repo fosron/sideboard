@@ -43,16 +43,40 @@ Tab.-active {
     text-style: bold;
 }
 
+/* The whole chain must be given a height: Textual's defaults for these three are
+   `height: auto`, and an `auto` container cannot give a `1fr` child any space — the
+   tab body silently collapses to zero rows. */
 TabbedContent > ContentSwitcher {
+    height: 1fr;
     background: $background;
 }
 
 TabPane {
     padding: 0;
+    height: 1fr;
     background: $background;
 }
 
-/* ---------------------------------------------------------------- card shell */
+/* A tab body: an overview grid, a stack of cards, or a filterable read view. */
+.sb-pane {
+    height: 1fr;
+    width: 1fr;
+}
+
+/* Subfilter row for the Read tab. It must be exactly one row: an unconstrained
+   widget in a tab competes with the pane for the fraction space and can leave the
+   cards with zero height. */
+FilterBar {
+    height: 1;
+    padding: 0 1;
+    background: $background;
+}
+
+FilterBar:focus {
+    background: $panel;
+}
+
+/* -------------------------------------------------------------------------------- card shell */
 
 CardShell {
     border: round $sb-border;
@@ -78,22 +102,18 @@ CardShell.sb-pinned {
     border: round $sb-held;
 }
 
-CardShell.sb-slot {
-    height: 1fr;
-}
-
 CardShell.sb-minimal {
     border: none;
     padding: 0;
 }
 
-CardShell > .sb-card-body {
-    height: 1fr;
-}
-
 /* ------------------------------------------------------------------ overview */
 
 #sb-overview-grid {
+    height: 1fr;
+}
+
+#sb-overview-rows {
     height: 1fr;
 }
 
@@ -103,16 +123,28 @@ CardShell > .sb-card-body {
 
 /* -------------------------------------------------------------------- layout */
 
+/* A stack of cards scrolls: with several widgets on one tab, slicing the viewport
+   evenly would give each card a border and one line. Each card keeps at least eight
+   content rows, and the pane scrolls (mouse wheel, PgUp/PgDn, Home/End). */
 .sb-stack {
     height: 1fr;
+    overflow-y: auto;
 }
 
+/* Card heights in a stack are set by DetailPane.apply_heights: an explicit row count
+   per card, so a tab with several widgets stays readable and scrolls. */
 .sb-stack > CardShell {
     margin-bottom: 0;
 }
 
 .sb-grid {
     height: 1fr;
+    overflow-y: auto;
+}
+
+.sb-overview-row > CardShell {
+    height: 1fr;
+    min-height: 10;
 }
 
 .sb-compact-status {

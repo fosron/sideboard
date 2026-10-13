@@ -48,6 +48,7 @@ ui/overview.py + ui/rotation.py ── responsive slots and the rotation state m
 | `ui/rotation.py` | hold reasons, preemptible dwell, grace period, pinning, dedupe, setup-card suppression |
 | `ui/overview.py` | responsive slot layouts; narrowing merges queues and never drops a widget |
 | `ui/renderers/` | metric, item, table, status and sparkline renderers built from `rich.text.Text` — no markup parsing, so untrusted content cannot inject style |
+| `ui/shell.py` `DetailPane.apply_heights` | explicit per-card heights for detail and stack tabs: an estimate from the view model, floored and capped, inside a scrollable pane. Neither `1fr` (slices every card) nor `auto` (fills the viewport with one card) works for a Rich `Group` |
 | `ui/styles.py` | the only place a Rich-rendered colour is chosen. Textual CSS variables are *not* Rich style names |
 | `ui/screens.py` | detail, help, palette and mouse-diagnostic modals |
 | `app.py` | composition root and orchestration: tabs, presentation, holds, item state, URL validation, configuration reload. No feature-specific branch |
@@ -121,6 +122,24 @@ interpreted with the wrong model.
 * No shell strings, `eval`, configuration-supplied Python paths or arbitrary commands.
 * Logs exclude payloads, balances and private identifiers; privacy mode masks them on
   screen too.
+
+## Display rules that are easy to get wrong
+
+Three failure modes have bitten this codebase, all of them invisible to tests that only
+inspect view models, and all of them now covered by `tests/ui/test_rendering.py`, which
+asserts the composited screen text:
+
+1. **An `auto`-height chain collapses.** `TabbedContent`, `ContentSwitcher` and
+   `TabPane` all default to `height: auto`, and an `auto` container gives a `1fr` child
+   no space, so the whole card area can silently become zero rows high. Every element in
+   the chain now states its height.
+2. **A widget with no height competes for the pane.** The Read tab's filter bar, once
+   unconstrained, took the whole tab and left the card at height 0. It is a one-row,
+   fixed-height widget now.
+3. **`1fr` and `auto` are both wrong for a stack of cards.** A fraction slices the
+   viewport evenly (five cards in 40 rows leaves three content rows each); `auto` cannot
+   measure a Rich `Group` containing an `expand=True` table, so it fills the viewport.
+   `DetailPane.apply_heights` sets an explicit row count per card and the pane scrolls.
 
 ## Deliberate deviations from the plan's file tree
 

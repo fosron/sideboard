@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import time
 from collections import deque
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from ...core.contracts import (
@@ -230,5 +230,8 @@ def demo_payload() -> SourcePayload:
         ),
         battery=BatteryReading(present=True, percent=74.0, plugged_in=True),
         history=history,
+        as_of=datetime.now(UTC),
+        precision=Precision.INSTANT,
+        valid_until=datetime.now(UTC) + timedelta(seconds=60),
         provenance="demo",
     )

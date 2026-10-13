@@ -10,7 +10,7 @@ from collections.abc import Mapping, Sequence
 
 from rich.text import Text
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, VerticalScroll
 from textual.events import Click
 from textual.message import Message
 from textual.widget import Widget
@@ -105,8 +105,13 @@ class CompactStatus(Static):
 class DetailPane(Widget):
     """A tab body with one card per configured widget, arranged by layout."""
 
-    def __init__(self, *, id: str | None = None) -> None:
-        super().__init__(id=id)
+    # A card needs room for its border, a few metric rows and at least one list row.
+    MIN_CARD_ROWS = 8
+    MAX_CARD_ROWS = 34
+    LEAD_CARD_EXTRA_ROWS = 4
+
+    def __init__(self, *, id: str | None = None, classes: str = "") -> None:
+        super().__init__(id=id, classes=classes)
         self._cards: dict[str, CardShell] = {}
         self.widget_ids: tuple[str, ...] = ()
         # Not named ``layout``: Textual's Widget already has a ``layout`` property.
@@ -134,17 +139,58 @@ class DetailPane(Widget):
             for index, chunk in enumerate(rows):
                 row = Horizontal(classes="sb-overview-row", id=f"sb-detail-row-{index}")
                 await self.mount(row)
+                # Rows in a grid keep room for the cards they hold.
+                row.styles.min_height = 12
                 for widget_id in chunk:
                     shell = self._shell(widget_id, labels)
                     self._cards[widget_id] = shell
                     await row.mount(shell)
             return
-        container = Vertical(classes="sb-stack", id="sb-detail-stack")
+        container = VerticalScroll(classes="sb-stack", id="sb-detail-stack")
         await self.mount(container)
         for widget_id in self.widget_ids:
             shell = self._shell(widget_id, labels)
             self._cards[widget_id] = shell
             await container.mount(shell)
+        # Heights are set explicitly once the cards exist; see apply_heights.
+        self.apply_heights()
+
+    def on_resize(self, event: object) -> None:
+        size = getattr(event, "size", None)
+        if size is not None:
+            self.apply_heights(viewport_height=size.height)
+
+    def apply_heights(self, *, viewport_height: int | None = None) -> None:
+        """Give every card an explicit, predictable height.
+
+        Neither ``1fr`` nor ``auto`` works here. A fraction slices the viewport evenly,
+        so a five-card tab gives each card three content rows. ``auto`` cannot measure a
+        Rich ``Group`` that contains an expanding table, so it fills the viewport and a
+        single card covers the whole tab. An explicit row count keeps every card usable
+        and lets the pane scroll when they do not all fit.
+        """
+        if self.layout_kind == "grid":
+            return
+        count = len(self.widget_ids)
+        available = viewport_height or self.size.height or 0
+        if count == 0 or available <= 0:
+            return
+        even_split = max(self.MIN_CARD_ROWS, available // count)
+        for index, widget_id in enumerate(self.widget_ids):
+            card = self._cards.get(widget_id)
+            if card is None:
+                continue
+            # Prefer the card's own estimate so a data-heavy card is not clipped, and
+            # fall back to an even split before the first presentation.
+            estimated = card.estimated_content_rows() + 2  # its own border
+            lead = self.layout_kind == "detail" and index == 0
+            height = min(
+                self.MAX_CARD_ROWS,
+                max(self.MIN_CARD_ROWS, estimated if card.view is not None else even_split)
+                + (self.LEAD_CARD_EXTRA_ROWS if lead else 0),
+            )
+            if card.styles.height != height:
+                card.styles.height = height
 
     @staticmethod
     def _shell(widget_id: str, labels: Mapping[str, str] | None) -> CardShell:

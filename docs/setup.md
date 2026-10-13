@@ -105,6 +105,7 @@ read, capped at 1 MiB.
 | `Ctrl+R` | validate and reload configuration; an invalid update keeps the running one |
 | `Tab` / `Shift+Tab` | move focus between cards |
 | `↑` / `↓` | move the selection inside the focused card |
+| `PgUp` / `PgDn`, `Home` / `End`, wheel | scroll a tab whose cards are taller than the window |
 | `Space` | toggle global visual pause (collection is independent) |
 | `p` | pin / unpin the focused Overview card |
 | `n` | advance the focused rotating card, even while paused |
@@ -139,6 +140,21 @@ navigation all work from the keyboard, so nothing is lost.
 
 Terminal requirements: any terminal that reports its size. No Nerd Font, image
 protocol, gradient, special colour scheme or emoji meaning is required.
+
+### How a tab is laid out
+
+A card is always laid out with a usable height:
+
+* the **Overview** fills the window: two pinned slots and two rotating slots share it,
+  and narrowing merges the rotating queues rather than squeezing them;
+* a **detail tab** (Money, Watch, Life) sizes each card from what it actually contains,
+  so a table gets rows and a metrics card gets lines;
+* a **stack tab** (Systems) does the same and **scrolls** when the cards together need
+  more rows than the window has — `PgDn` or the wheel reaches the later cards;
+* a **filterable tab** (Read) gives one row to the subfilter bar and the rest to the
+  selected view.
+
+If a card looks too small, press `Enter` on it: the detail view uses the whole window.
 
 ## 5. Sizes
 
@@ -179,6 +195,7 @@ field-level problems are shown in a notification and in the log.
 | Money total looks incomplete | at least one holding has no quote or no FX rate. That is deliberate: `incomplete: N of M unpriced` |
 | The Overview stopped rotating | a manual pause, a held card, or an open modal. `Ctrl+Y` releases holds; the status bar shows `PAUSED` |
 | The app misbehaves after editing code | restart the process; Python changes are not hot-reloaded |
+| Only the first cards of a tab are visible | that tab is taller than the window; scroll with `PgDn` or the wheel, or press `Enter` for one card full-screen |
 
 ## 8. Measured behaviour
 

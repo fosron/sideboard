@@ -14,7 +14,7 @@ from rich.style import Style
 from rich.text import Text
 
 from ..core.contracts import Item, Privacy, Severity
-from .styles import DIM, ERROR, INFO, OK, VALUE, WARN
+from .styles import DIM, ERROR, INFO, ITEM, OK, READ, VALUE, WARN
 
 __all__ = [
     "MASK",
@@ -85,7 +85,7 @@ def item_text(item: Item, *, privacy: bool, width: int) -> Text:
     text = Text()
     marker = "◆" if item.saved else " "
     text.append(f"{marker} ")
-    style = "sb-read" if item.read else "sb-item"
+    style = READ if item.read else ITEM
     text.append(single_line(item.title, max(20, width - 4)), style=style)
     if item.badge:
         text.append("  ")

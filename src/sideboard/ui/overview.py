@@ -138,8 +138,8 @@ def _merged(
 class OverviewPane(Widget):
     """Container of :class:`CardShell` slots, rebuilt only when the layout changes."""
 
-    def __init__(self, *, id: str | None = "sb-overview-grid") -> None:
-        super().__init__(id=id)
+    def __init__(self, *, id: str | None = "sb-overview-grid", classes: str = "") -> None:
+        super().__init__(id=id, classes=classes)
         self.mode: LayoutMode | None = None
         self.specs: tuple[SlotSpec, ...] = ()
         self._cards: dict[str, CardShell] = {}
