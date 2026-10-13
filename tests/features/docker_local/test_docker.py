@@ -14,7 +14,7 @@ import pytest
 
 from sideboard.core.capabilities import CommandResult
 from sideboard.core.clock import FakeClock
-from sideboard.core.contracts import ProviderBuild
+from sideboard.core.contracts import PresentInput, ProviderBuild, Severity
 from sideboard.core.errors import ParseError, UnavailableError
 from sideboard.features.docker_local.commands import (
     HEALTH_TEMPLATE,
@@ -29,8 +29,13 @@ from sideboard.features.docker_local.commands import (
     parse_inventory_line,
 )
 from sideboard.features.docker_local.config import DockerSettings
-from sideboard.features.docker_local.models import DockerPayload
-from sideboard.features.docker_local.presenter import health_label, present_summary, present_table
+from sideboard.features.docker_local.models import ContainerReading, DockerPayload, EngineInfo
+from sideboard.features.docker_local.presenter import (
+    health_label,
+    present_summary,
+    present_table,
+    severity_for,
+)
 from sideboard.features.docker_local.provider import DockerProvider
 from sideboard.features.docker_local.units import (
     parse_cpu_percent,
@@ -610,3 +615,60 @@ def test_metadata_matches_the_short_inventory_id() -> None:
     assert container.restarts == 3
     assert container.health == "healthy"
     assert container.health_defined is True
+
+
+def test_stopped_container_health_is_history_not_a_live_signal() -> None:
+    """Docker keeps the last health status after a container stops.
+
+    Counting it would report a deliberate stop as an incident and inflate the summary's
+    unhealthy count with containers that are not running at all.
+    """
+    stopped = ContainerReading(
+        id="a1",
+        name="bench-fpm",
+        state="exited",
+        running=False,
+        health="unhealthy",
+        health_defined=True,
+        exit_code=0,
+    )
+    running_bad = ContainerReading(
+        id="a2", name="app", state="running", running=True, health="unhealthy", health_defined=True
+    )
+    running_unknown = ContainerReading(id="a3", name="db", state="running", running=True)
+
+    assert stopped.health_status is None
+    assert running_bad.health_status == "unhealthy"
+    assert running_unknown.health_status is None
+    assert health_label(stopped) == "-"
+    assert health_label(running_unknown) == "unknown"
+    assert severity_for(stopped, frozenset()) is Severity.UNKNOWN
+    assert severity_for(running_bad, frozenset()) is Severity.WARNING
+
+    payload = DockerPayload(
+        engine=EngineInfo(context="demo", is_local=True),
+        containers=(stopped, running_bad, running_unknown),
+    )
+    view = present_summary(
+        PresentInput(
+            settings=summary_settings(),
+            inputs={"primary": envelope_for(payload)},
+            context=view_context(),
+        )
+    )
+    unhealthy = view.metric("unhealthy")
+    assert unhealthy is not None
+    assert unhealthy.value_text == "1", "only the running unhealthy container counts"
+    assert "not running" in (unhealthy.note or "")
+
+    table = present_table(
+        PresentInput(
+            settings=table_settings(),
+            inputs={"primary": envelope_for(payload)},
+            context=view_context(),
+        )
+    )
+    assert table.table is not None
+    cells = {row.id: row.cells for row in table.table.rows}
+    assert cells["docker:a1"]["health"] == "-"
+    assert cells["docker:a2"]["health"] == "unhealthy"

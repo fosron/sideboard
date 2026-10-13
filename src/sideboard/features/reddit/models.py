@@ -21,6 +21,7 @@ __all__ = [
     "REDDIT_PAYLOAD_SCHEMA",
     "CommunityReport",
     "CommunityReportStatus",
+    "RedditMode",
     "RedditPayload",
     "Thread",
 ]
@@ -33,6 +34,10 @@ _CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 _SPACE = re.compile(r"\s+")
 
 CommunityReportStatus = Literal["ok", "blocked", "error", "skipped"]
+
+# The mode a payload was produced in. ``links`` and ``disabled`` are complete,
+# deliberate states that perform no network I/O; only ``rss`` collects.
+RedditMode = Literal["links", "disabled", "rss"]
 
 
 def _plain(value: str, *, limit: int) -> str:
@@ -107,6 +112,8 @@ class RedditPayload(SourcePayload):
 
     threads: tuple[Thread, ...]
     community_reports: tuple[CommunityReport, ...] = ()
+    # Defaults to "rss" so an older cached payload keeps its meaning.
+    mode: RedditMode = "rss"
 
     @classmethod
     def schema_id(cls) -> str:

@@ -64,6 +64,19 @@ class ContainerReading(_Frozen):
     note: str | None = None
 
     @property
+    def health_status(self) -> str | None:
+        """Current health, or ``None`` when the container is not running.
+
+        Docker keeps the last health status after a container stops, so an exited
+        container can still read "unhealthy" from its final run. That is history, not a
+        current signal: reporting it would make a stopped container look like a live
+        incident, and would inflate the unhealthy count with deliberate stops.
+        """
+        if not self.running:
+            return None
+        return self.health
+
+    @property
     def is_unexpected_exit(self) -> bool:
         """Only an explicitly expected-running service can be an unexpected exit."""
         return not self.running and self.state in {"exited", "dead"}

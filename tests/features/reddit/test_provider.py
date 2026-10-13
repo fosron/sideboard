@@ -20,7 +20,6 @@ from sideboard.core.capabilities import HttpReader
 from sideboard.core.clock import FakeClock
 from sideboard.core.contracts import Cadence, Capability, ProviderBuild
 from sideboard.core.errors import (
-    BlockedError,
     ParseError,
     RateLimitedError,
     TransientNetworkError,
@@ -114,7 +113,7 @@ async def collect(
 # --------------------------------------------------------------------------- #
 
 
-async def test_links_mode_raises_blocked_and_never_touches_http(
+async def test_links_mode_reports_the_mode_and_never_touches_http(
     respx_mock: respx.MockRouter, clock: FakeClock, reader: HttpReader
 ) -> None:
     route = respx_mock.route(host="www.reddit.com").mock(
@@ -122,15 +121,20 @@ async def test_links_mode_raises_blocked_and_never_touches_http(
     )
     settings = RedditSettings(mode="links")
     provider = provider_for(settings, clock)
-    with pytest.raises(BlockedError) as excinfo:
-        await provider.fetch(build_context(settings, clock, http=reader))
-    assert excinfo.value.detail["mode"] == "links"
-    assert "link-only" in excinfo.value.message
+    payload = await provider.fetch(build_context(settings, clock, http=reader))
+    # A configured mode is a success with no request, not a failure. Raising here used
+    # to log "blocked" on every refresh and back the source off for an hour, which is a
+    # false report about a mode the user chose.
+    assert isinstance(payload, RedditPayload)
+    assert payload.mode == "links"
+    assert payload.threads == ()
+    assert payload.provenance == "reddit-links"
+    assert "link-only" in (payload.coverage.notes or "")
     assert len(respx_mock.calls) == 0
     assert route.call_count == 0
 
 
-async def test_disabled_mode_raises_blocked_and_never_touches_http(
+async def test_disabled_mode_reports_the_mode_and_never_touches_http(
     respx_mock: respx.MockRouter, clock: FakeClock, reader: HttpReader
 ) -> None:
     respx_mock.route(host="www.reddit.com").mock(
@@ -138,9 +142,9 @@ async def test_disabled_mode_raises_blocked_and_never_touches_http(
     )
     settings = RedditSettings(mode="disabled")
     provider = provider_for(settings, clock)
-    with pytest.raises(BlockedError) as excinfo:
-        await provider.fetch(build_context(settings, clock, http=reader))
-    assert excinfo.value.detail["mode"] == "disabled"
+    payload = await provider.fetch(build_context(settings, clock, http=reader))
+    assert isinstance(payload, RedditPayload)
+    assert payload.mode == "disabled"
     assert len(respx_mock.calls) == 0
 
 
@@ -346,7 +350,10 @@ def test_registration_matches_the_contract() -> None:
         active_seconds=3600.0, ambient_seconds=3600.0, background_seconds=7200.0
     )
     assert REDDIT_SOURCE.retention_seconds == 48 * 3600
-    assert REDDIT_SOURCE.requires_setup is True
+    # Both modes are complete configurations: link-only performs no I/O and RSS mode is
+    # a deliberate choice by the operator. Conditional access is stated on the card, and
+    # is not a missing setting, so it must not be reported as a setup gap.
+    assert REDDIT_SOURCE.requires_setup is False
     assert REDDIT_SOURCE.setup_hint == (
         "Reddit access is conditional; validate a permitted feed or stay in link-only mode."
     )

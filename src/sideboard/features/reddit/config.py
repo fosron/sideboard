@@ -72,6 +72,10 @@ class RedditSettings(BaseModel):
 
     mode: RedditMode = "links"
     communities: list[str] = Field(default_factory=lambda: list(DEFAULT_COMMUNITIES))
+    # One request per community. Reddit's public feed rate-limits a burst (a 429 is
+    # reported per community as partial coverage), so requests are spaced out. Set 0 to
+    # fire them together and accept more 429s.
+    request_spacing_seconds: float = Field(default=3.0, ge=0.0, le=30.0)
     active_seconds: float | None = Field(default=None, gt=0.0)
     ambient_seconds: float | None = Field(default=None, gt=0.0)
     background_seconds: float | None = Field(default=None, gt=0.0)

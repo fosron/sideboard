@@ -34,10 +34,10 @@ REDDIT_SOURCE = SourceSpec(
     cadence=Cadence(active_seconds=3600.0, ambient_seconds=3600.0, background_seconds=7200.0),
     retention_seconds=48 * 3600,
     description="Permitted Reddit feeds: public RSS after validation, link-only otherwise.",
-    # Access is conditional, so the spec carries a setup hint; link-only mode is a
-    # deliberate, complete state rather than a configuration gap.
-    requires_setup=True,
-    setup_check=lambda settings: settings.mode == "links",
+    # Both modes are complete configurations: link-only performs no I/O, and RSS mode is
+    # the user's own decision. Access is conditional, which the card states explicitly;
+    # it is not a missing setting, so it is not reported as a setup gap.
+    requires_setup=False,
     setup_hint=(
         "Reddit access is conditional; validate a permitted feed or stay in link-only mode."
     ),

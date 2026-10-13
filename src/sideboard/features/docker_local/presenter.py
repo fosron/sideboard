@@ -36,16 +36,22 @@ def format_bytes(value: float | int | None) -> str | None:
 
 
 def health_label(container: ContainerReading) -> str:
-    """A running container without a healthcheck is not verified healthy."""
+    """Health is only a live signal for a running container.
+
+    A running container without a healthcheck is *unknown*, never "verified healthy".
+    A stopped container reads "-": the state column already says it exited, and its last
+    health status is history.
+    """
+    if not container.running:
+        return "-"
     if container.health:
         return container.health
-    if container.running:
-        return "unknown"
-    return container.state
+    return "unknown"
 
 
 def severity_for(container: ContainerReading, expected: frozenset[str]) -> Severity:
-    if container.health == "unhealthy":
+    # Only a *running* unhealthy container is a live problem; a stopped one is history.
+    if container.health_status == "unhealthy":
         return Severity.WARNING
     if container.running:
         return Severity.OK
@@ -59,7 +65,7 @@ def severity_for(container: ContainerReading, expected: frozenset[str]) -> Sever
 def _counts(payload: DockerPayload) -> tuple[int, int, int, int]:
     running = sum(1 for c in payload.containers if c.running)
     stopped = sum(1 for c in payload.containers if not c.running)
-    unhealthy = sum(1 for c in payload.containers if c.health == "unhealthy")
+    unhealthy = sum(1 for c in payload.containers if c.health_status == "unhealthy")
     health_unknown = sum(1 for c in payload.containers if c.running and not c.health_defined)
     return running, stopped, unhealthy, health_unknown
 
@@ -103,9 +109,12 @@ def present_summary(inputs: PresentInput) -> ViewModel:
                 id="unhealthy",
                 label="unhealthy",
                 value_text=str(unhealthy),
-                basis="explicit health status only",
+                basis="running containers with an explicit unhealthy status",
                 available=True,
-                note=None if health_unknown == 0 else f"{health_unknown} without a healthcheck",
+                note=(
+                    f"{health_unknown} running without a healthcheck · "
+                    f"{stopped} not running (their last status is history)"
+                ),
                 severity=Severity.WARNING if unhealthy or unexpected else Severity.OK,
             )
         )

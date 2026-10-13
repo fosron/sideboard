@@ -100,18 +100,12 @@ class RedditProvider:
     async def fetch(self, context: ProviderBuild) -> SourcePayload:
         """Collect permitted feeds, or raise the typed error for the configured mode."""
         settings = self.settings
-        if settings.mode == "disabled":
-            raise BlockedError(
-                "Reddit collection is disabled",
-                mode=settings.mode,
-                hint='Set mode = "links" or "rss" to show this card again.',
-            )
-        if settings.mode == "links":
-            raise BlockedError(
-                "Reddit feed is in link-only mode",
-                mode=settings.mode,
-                hint='Validate a permitted feed from this Mac, then set mode = "rss".',
-            )
+        if settings.mode in {"links", "disabled"}:
+            # A deliberately configured mode is not a failure: it performs no I/O and
+            # returns a payload that says so. Raising here would log a "blocked" failure
+            # on every refresh and back the source off for an hour, which would be a
+            # false report about a mode the user chose.
+            return self._non_collecting_payload(settings)
         if context.offline:
             raise TransientNetworkError("public network access is suppressed in offline mode")
         http = context.http
@@ -125,7 +119,11 @@ class RedditProvider:
         threads: list[Thread] = []
         reports: list[CommunityReport] = []
         errors: dict[str, ProviderError] = {}
-        for community in communities:
+        spacing = float(getattr(settings, "request_spacing_seconds", 0.0) or 0.0)
+        for index, community in enumerate(communities):
+            if index and spacing > 0:
+                # Politeness, not evasion: the same host, just not in one burst.
+                await context.clock.sleep(spacing)
             try:
                 collected = await _collect_community(
                     http, community, limit=settings.max_items_per_community
@@ -162,6 +160,42 @@ class RedditProvider:
                 observed=len(communities) - len(errors),
                 missing=missing,
                 notes=_coverage_notes(errors),
+            ),
+        )
+
+    def _non_collecting_payload(self, settings: RedditSettings) -> RedditPayload:
+        """The honest payload for ``links``/``disabled`` mode: configured, no request."""
+        now_utc = datetime.now(UTC)
+        reports = tuple(
+            CommunityReport(
+                community=community,
+                status="skipped",
+                note=(
+                    "link-only mode: no feed was requested"
+                    if settings.mode == "links"
+                    else "disabled: no feed was requested"
+                ),
+            )
+            for community in settings.communities
+        )
+        note = (
+            "link-only mode: Reddit access is conditional, so no feed is requested"
+            if settings.mode == "links"
+            else "disabled: this source is switched off and requests nothing"
+        )
+        return RedditPayload(
+            threads=(),
+            community_reports=reports,
+            mode=settings.mode,
+            as_of=None,
+            precision=Precision.UNKNOWN,
+            valid_until=now_utc + timedelta(hours=VALID_FOR_HOURS),
+            provenance=f"reddit-{settings.mode}",
+            coverage=Coverage(
+                expected=len(settings.communities),
+                observed=0,
+                missing=tuple(settings.communities),
+                notes=note,
             ),
         )
 

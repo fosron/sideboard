@@ -91,13 +91,19 @@ def present(requested: PresentInput) -> ViewModel:
     """Map one bound ``reddit.threads`` envelope into a standard view."""
     settings = _settings(requested.settings)
     envelope = _envelope(requested)
+    payload = envelope.payload if envelope is not None else None
+    # Current behaviour: the provider reports the configured mode in its payload.
+    if isinstance(payload, RedditPayload) and payload.mode == "disabled":
+        return _disabled_view()
+    if isinstance(payload, RedditPayload) and payload.mode == "links":
+        return _link_only_view(settings, envelope)
+    # Older cached payloads carried the mode in the error detail instead.
     error = envelope.error if envelope is not None else None
     mode = error.detail.get("mode") if error is not None else None
     if mode == "disabled":
         return _disabled_view()
     if mode == "links" or _is_link_only(error):
         return _link_only_view(settings, envelope)
-    payload = envelope.payload if envelope is not None else None
     if isinstance(payload, RedditPayload):
         return _threads_view(settings, payload, requested)
     return _unavailable_view(settings, envelope, requested)
