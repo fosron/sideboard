@@ -114,7 +114,7 @@ read, capped at 1 MiB.
 | `s` | save / unsave the selected item |
 | `r` | request a rate-limited refresh of the focused card's provider |
 | `v` | privacy mode: mask amounts, process names, container and project names |
-| `Ctrl+D` | mouse/focus diagnostic and reset holds |
+| `Ctrl+D` | mouse/focus diagnostic and reset holds (any key closes it) |
 | `Ctrl+Y` | release every hold |
 | `?` | help · `Esc` close/back · `q` quit |
 
@@ -134,8 +134,10 @@ read, capped at 1 MiB.
 
 If hover or mouse selection does not work, the terminal is probably not reporting
 motion. Press `Ctrl+D`: the diagnostic screen counts `MouseMove`, `Enter`, `Leave`,
-click and blur events and says when motion has never been seen. `Ctrl+Y` releases every
-hold, and `uv run sideboard --no-mouse` turns hover off entirely. Selection, pausing and
+click and blur events and says when motion has never been seen. `Esc`, `q`, or any other
+key except `r` closes it again, so a terminal that sends an unexpected byte (Ctrl+D is
+also end-of-input) cannot leave you stuck on it. `Ctrl+Y` releases every hold, and
+`uv run sideboard --no-mouse` turns hover off entirely. Selection, pausing and
 navigation all work from the keyboard, so nothing is lost.
 
 Terminal requirements: any terminal that reports its size. No Nerd Font, image

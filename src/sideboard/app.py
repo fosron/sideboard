@@ -189,6 +189,12 @@ class SideboardApp(App[None]):
 
     def __init__(self, runtime: Runtime, *, mouse: bool = True) -> None:
         super().__init__()
+        # No animation anywhere. App.__init__ assigns animation_level from the
+        # environment, so a class attribute would be shadowed: this has to come after
+        # super().__init__(). Textual animates the tab underline for 0.3 s at 60 fps,
+        # and each of those frames repainted the whole screen — nineteen full-screen
+        # paints in the first third of a second of every run.
+        self.animation_level = "none"
         # Hover interaction can be disabled for a terminal that misreports motion; the
         # keyboard controls stay fully usable.
         self.mouse_enabled = mouse
@@ -395,6 +401,8 @@ class SideboardApp(App[None]):
         pane = self._overview
         if pane is None:
             return
+        batch = self.batch_update()
+        batch.__enter__()
         self._build_rotation()
         resolved = mode or self._layout_mode()
         slots, pinned, dwell = self._slot_source()
@@ -409,6 +417,8 @@ class SideboardApp(App[None]):
                 labels={spec.slot_id: spec.label for spec in specs},
             )
             rotation.initialize()
+        batch.__exit__(None, None, None)
+        self._present_overview()
 
     def _layout_mode(self) -> LayoutMode:
         pane = self._overview
@@ -578,8 +588,9 @@ class SideboardApp(App[None]):
         self._slot_repaint_timer = None
         pending = sorted(self._pending_slot_repaints)
         self._pending_slot_repaints.clear()
-        for slot_id in pending:
-            self._present_slot(slot_id)
+        with self.batch_update():
+            for slot_id in pending:
+                self._present_slot(slot_id)
 
     def _present_slot(self, slot_id: str) -> None:
         """Re-present a single overview slot, for a change that only affects it."""
@@ -595,8 +606,11 @@ class SideboardApp(App[None]):
         pane = self._overview
         if pane is None or self._rotation is None:
             return
-        for spec in pane.specs:
-            self._present_overview_slot(spec)
+        # One repaint for the whole grid: without this, presenting four cards produced
+        # four separate paints, and a tab switch produced about twenty.
+        with self.batch_update():
+            for spec in pane.specs:
+                self._present_overview_slot(spec)
 
     def _present_overview_slot(self, spec: SlotSpec) -> None:
         """Present one slot's card. Used directly by hover, which affects one slot."""
@@ -620,16 +634,20 @@ class SideboardApp(App[None]):
         pane = self._detail_panes.get(tab_id)
         if pane is None:
             return
+        if tab_id != self._active_tab:
+            # A hidden pane still has cards, and presenting them assigns heights, which
+            # marks the screen for layout. Doing that for five tabs at start-up produced
+            # twenty compositor updates in the first second. The tab is presented the
+            # moment it is shown, which is the first time anyone can see it.
+            return
         if tuple(self._tab_widgets(tab_id)) != pane.widget_ids:
             self.run_worker(self._rebuild_filter_pane(tab_id), exclusive=False)
             return
-        for widget_id in pane.widget_ids:
-            card = pane.card(widget_id)
-            if card is not None:
-                self._present_card(card, widget_id, mode=ViewMode.COMPACT)
-        # Heights follow the data: a card showing a long table grows, and the pane
-        # scrolls instead of clipping it.
-        pane.apply_heights()
+        with self.batch_update():
+            for widget_id in pane.widget_ids:
+                card = pane.card(widget_id)
+                if card is not None:
+                    self._present_card(card, widget_id, mode=ViewMode.COMPACT)
 
     async def _rebuild_filter_pane(self, tab_id: str) -> None:
         pane = self._detail_panes.get(tab_id)
@@ -640,9 +658,11 @@ class SideboardApp(App[None]):
         self._present_detail(tab_id)
 
     def _present_everything(self) -> None:
-        self._present_overview()
-        for tab_id in self._detail_panes:
-            self._present_detail(tab_id)
+        """Present what can be seen: the rotating Overview and the active tab."""
+        with self.batch_update():
+            self._present_overview()
+            if self._active_tab is not None:
+                self._present_detail(self._active_tab)
 
     # ------------------------------------------------------------------ ticks
 
@@ -717,7 +737,10 @@ class SideboardApp(App[None]):
         """
         for widget in self.query(selector):
             if isinstance(widget, Static):
-                widget.update(text)
+                # layout=False: the status line and footer are one row tall whatever they
+                # say. Textual's default asks for a layout, which turned a changed clock
+                # digit into a full-screen reflow and repaint.
+                widget.update(text, layout=False)
             return
 
     # ------------------------------------------------------------------ events
@@ -752,16 +775,31 @@ class SideboardApp(App[None]):
         return f"tab-{tab_id}"
 
     def _set_tab(self, tab_id: str, *, activate: bool = True) -> None:
-        self._active_tab = tab_id
-        self.runtime.scheduler.set_active_tab(tab_id)
-        if activate:
-            with contextlib.suppress(Exception):
-                self.query_one("#sb-body", TabbedContent).active = self._pane_id(tab_id)
-        self._present_detail(tab_id)
-        cards = self._cards_for_tab(tab_id)
-        if cards:
-            self._user_navigation = False
-            cards[0].focus()
+        """Switch to a tab, presenting its cards *before* it becomes visible.
+
+        Presenting first means the pane's card heights are set while it is still hidden,
+        so making it visible needs one layout and one paint. Doing it the other way round
+        painted the newly visible pane, then re-laid it out when the heights arrived, then
+        painted again — several full screen writes for one key press.
+        """
+        # One batch for the whole switch: activating the pane, presenting its cards,
+        # laying them out and moving focus each used to trigger its own full-screen paint.
+        with self.batch_update():
+            self._active_tab = tab_id
+            self.runtime.scheduler.set_active_tab(tab_id)
+            self._present_detail(tab_id)
+            pane = self._detail_panes.get(tab_id)
+            if pane is not None:
+                # Laid out once, now that the cards hold their data: a card's height
+                # follows its content at layout time, and later refreshes only repaint it.
+                pane.apply_heights()
+            if activate:
+                with contextlib.suppress(Exception):
+                    self.query_one("#sb-body", TabbedContent).active = self._pane_id(tab_id)
+            cards = self._cards_for_tab(tab_id)
+            if cards:
+                self._user_navigation = False
+                cards[0].focus()
 
     def _cards_for_tab(self, tab_id: str) -> list[CardShell]:
         if self._is_overview(tab_id) and self._overview is not None:

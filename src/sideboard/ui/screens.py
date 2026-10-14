@@ -13,7 +13,7 @@ from rich.console import Group, RenderableType
 from rich.text import Text
 from textual.binding import Binding
 from textual.containers import VerticalScroll
-from textual.events import Click, MouseMove
+from textual.events import Click, Key, MouseMove
 from textual.message import Message
 from textual.screen import ModalScreen
 from textual.widgets import Input, OptionList, Static
@@ -135,7 +135,7 @@ class HelpScreen(ModalScreen[None]):
         ("s", "save / unsave the selected item"),
         ("r", "request a rate-limited refresh of the selected provider"),
         ("v", "privacy mode: hide amounts and private identifiers"),
-        ("Ctrl+D", "mouse / focus diagnostic and reset holds"),
+        ("Ctrl+D", "mouse / focus diagnostic (any key closes)"),
         ("Esc", "close / back"),
         ("q", "quit"),
     )
@@ -219,6 +219,8 @@ class MouseDiagnosticScreen(ModalScreen[None]):
 
     BINDINGS = [
         Binding("escape", "dismiss_screen", "close"),
+        Binding("q", "dismiss_screen", "close", show=False),
+        Binding("enter", "dismiss_screen", "close", show=False),
         Binding("r", "reset_holds", "reset holds"),
     ]
 
@@ -269,13 +271,28 @@ class MouseDiagnosticScreen(ModalScreen[None]):
             style=DIM,
         )
         text.append("r  release every hold (visible reset-holds action)\n", style=DIM)
-        text.append("Esc  close\n", style=DIM)
+        text.append("Esc, q, or any other key  close this screen\n", style=DIM)
         return text
 
     def _touch(self, kind: str, x: int | None = None, y: int | None = None) -> None:
         self.last = f"{kind} {x},{y}" if x is not None else kind
         with contextlib.suppress(Exception):  # pragma: no cover - may not be mounted yet
-            self.query_one("#sb-mouse-report", Static).update(self._report())
+            # layout=False: the report is a fixed block of lines, so recounting events must
+            # repaint its own rows instead of asking the whole screen to re-lay out. With
+            # the default, every fifth mouse move repainted the entire screen.
+            self.query_one("#sb-mouse-report", Static).update(self._report(), layout=False)
+
+    def on_key(self, event: Key) -> None:
+        """Any key other than r returns to the dashboard.
+
+        This screen exists to explain why hover is not working, so being stuck on it is
+        worse than not having it: a terminal that sends an unexpected byte (Ctrl+D is also
+        EOF) must not be able to trap the app here. ``r`` still releases holds.
+        """
+        if event.key == "r":
+            return
+        event.stop()
+        self.dismiss()
 
     def on_mouse_move(self, event: MouseMove) -> None:
         self.moves += 1

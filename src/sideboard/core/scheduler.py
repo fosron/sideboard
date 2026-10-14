@@ -25,6 +25,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import sqlite3
 import zlib
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
@@ -777,6 +778,10 @@ class Scheduler:
                 updated_at=self.clock.now().isoformat(),
                 retention_seconds=runtime.instance.retention_seconds,
             )
+        except ValueError, sqlite3.ProgrammingError:
+            # Shutdown closed the database under an in-flight write. The data was
+            # collected and shown; there is nothing to report and nothing to retry.
+            log.debug("database closed while persisting %s", runtime.source_id)
         except Exception:  # pragma: no cover - storage failure must not kill collection
             log.exception("could not persist envelope for %s", runtime.source_id)
 

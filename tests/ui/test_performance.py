@@ -11,6 +11,27 @@ scenario                                     terminal output  layout passes
 ===========================================  ==============  =============
 idle                                         24.7 KiB/s       0.4 /s
 pointer sweep at 20 transitions/second       255.6 KiB/s      up to 4 each
+
+Measured after them (140x44, demo data, collecting stopped):
+
+===========================================  ==============  =============
+scenario                                     terminal output  writes
+===========================================  ==============  =============
+idle                                         0.0 KiB/s        0
+pointer sweep at 20 transitions/second       17 KiB/s         coalesced
+one tab switch                               about 195 KiB    5
+start-up (before the animation fix)          222 KiB          24
+start-up (after it)                          47 KiB           6
+===========================================  ==============  =============
+
+Start-up was dominated by Textual's tab underline, which animates for 0.3 s at 60 fps
+and repainted the whole screen on every frame: nineteen full-screen paints before the
+dashboard was usable. ``App.__init__`` assigns ``animation_level`` from the environment,
+so it has to be set afterwards — a class attribute is silently shadowed.
+
+Bytes are counted where Textual decides to write (``App._display``), which is also where
+a batch suppresses the write, rather than where the compositor builds an update: counting
+earlier reports work that never reaches a terminal.
 ===========================================  ==============  =============
 """
 
@@ -23,7 +44,8 @@ from pathlib import Path
 
 import pytest
 from rich.console import Console
-from textual._compositor import Compositor
+from textual._compositor import CompositorUpdate
+from textual.app import App
 from textual.screen import Screen
 from textual.widget import Widget
 
@@ -36,6 +58,11 @@ from sideboard.ui.card import CardShell
 IDLE_BYTES_LIMIT = 4_000
 HOVER_PAIR_BYTES_LIMIT = 25_000
 SWEEP_BYTES_PER_TRANSITION_LIMIT = 6_000
+# A tab switch paints the newly visible pane, and Textual lays that out more than once
+# (pane display, tab underline, scrollbar). It follows a deliberate key press, so the
+# bound is loose: it exists to catch a switch that re-presents every tab at once.
+SWITCH_BYTES_LIMIT = 260_000
+SWITCH_WRITES_LIMIT = 8
 
 
 class Meter:
@@ -43,22 +70,26 @@ class Meter:
 
     def __init__(self) -> None:
         self.bytes = 0
+        self.writes = 0
         self.layouts = 0
         self.card_refreshes = 0
         self._console = Console(width=140)
 
     def install(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        original_render_update = Compositor.render_update
+        original_display = App._display
         original_layout = Screen._refresh_layout
         original_refresh = Widget.refresh
 
-        def render_update(self, *args, **kwargs):  # type: ignore[no-untyped-def]
-            update = original_render_update(self, *args, **kwargs)
-            render_segments = getattr(update, "render_segments", None)
-            if render_segments is not None:  # a CompositorUpdate, not a plain renderable
+        def display(app: App[object], screen: object, renderable: object) -> None:
+            if (
+                isinstance(renderable, CompositorUpdate)
+                and not app._batch_count
+                and not app._closed
+            ):
                 with contextlib.suppress(Exception):  # measurement only
-                    METER[0].bytes += len(render_segments(METER[0]._console))
-            return update
+                    METER[0].bytes += len(renderable.render_segments(METER[0]._console))
+                    METER[0].writes += 1
+            return original_display(app, screen, renderable)  # type: ignore[arg-type]
 
         def layout(self, *args, **kwargs):  # type: ignore[no-untyped-def]
             METER[0].layouts += 1
@@ -69,12 +100,13 @@ class Meter:
                 METER[0].card_refreshes += 1
             return original_refresh(widget, *args, **kwargs)
 
-        monkeypatch.setattr(Compositor, "render_update", render_update)
+        monkeypatch.setattr(App, "_display", display)
         monkeypatch.setattr(Screen, "_refresh_layout", layout)
         monkeypatch.setattr(Widget, "refresh", refresh)
 
     def reset(self) -> None:
         self.bytes = 0
+        self.writes = 0
         self.layouts = 0
         self.card_refreshes = 0
 
@@ -220,4 +252,50 @@ async def test_changed_values_reach_the_screen(tmp_path: Path, meter: Meter) -> 
         )
         await pilot.pause()
         assert meter.card_refreshes >= 1, "a changed value must repaint the card"
+    await app.runtime.database.aclose()
+
+
+async def test_switching_tabs_costs_one_pane(tmp_path: Path, meter: Meter) -> None:
+    """A tab switch paints the pane that appears, not every tab's cards.
+
+    Start-up used to present all six tabs, and each presentation assigned card heights,
+    so a switch and a start-up both reflowed and repainted the whole screen several times.
+    Presentation is now batched and limited to what is visible.
+    """
+    app = await make_app(tmp_path)
+    async with app.run_test(size=(140, 44)) as pilot:
+        await settle(app, pilot)
+        meter.reset()
+        await pilot.press("6")
+        await pilot.pause()
+        await asyncio.sleep(0.3)
+        assert meter.bytes < SWITCH_BYTES_LIMIT, (
+            f"one tab switch wrote {meter.bytes:,} bytes in {meter.writes} writes"
+        )
+        assert meter.writes <= SWITCH_WRITES_LIMIT, (
+            f"one tab switch produced {meter.writes} terminal writes"
+        )
+    await app.runtime.database.aclose()
+
+
+async def test_startup_does_not_animate(tmp_path: Path, meter: Meter) -> None:
+    """Start-up must not spend its first third of a second animating.
+
+    Textual's tab underline animates for 0.3 s at 60 fps, and every frame repainted the
+    whole screen: nineteen full-screen paints before the dashboard was usable. The
+    animation level has to be set after ``App.__init__``, which assigns it from the
+    environment, so a class attribute alone silently does nothing.
+    """
+    app = await make_app(tmp_path)
+    assert app.animation_level == "none", (
+        f"animation level is {app.animation_level!r}: App.__init__ overwrote the class "
+        f"attribute, so every Textual animation runs"
+    )
+    async with app.run_test(size=(140, 44)) as pilot:
+        await asyncio.sleep(1.5)
+        assert meter.writes <= 10, (
+            f"{meter.writes} terminal writes in the first 1.5 s "
+            f"(an animating tab underline produces about twenty)"
+        )
+        _ = pilot
     await app.runtime.database.aclose()

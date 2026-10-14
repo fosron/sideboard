@@ -23,7 +23,8 @@ sys.path.insert(0, str(REPO / "src"))
 sys.path.insert(0, str(REPO / "tests"))
 
 from rich.console import Console  # noqa: E402
-from textual._compositor import Compositor  # noqa: E402
+from textual._compositor import CompositorUpdate  # noqa: E402
+from textual.app import App  # noqa: E402
 from textual.screen import Screen  # noqa: E402
 
 from sideboard.app import SideboardApp, build_runtime  # noqa: E402
@@ -36,7 +37,7 @@ SCENARIO_TIMEOUT = 90.0
 
 METER = {"bytes": 0, "layouts": 0.0, "layout_ms": 0.0}
 
-_ORIGINAL_RENDER_UPDATE = Compositor.render_update
+_ORIGINAL_DISPLAY = App._display
 _ORIGINAL_LAYOUT = Screen._refresh_layout
 _MEASURE_CONSOLE = Console(width=140)
 
@@ -50,11 +51,17 @@ def install_meters() -> None:
     output that would be produced.
     """
 
-    def counting_render_update(self, *args, **kwargs):  # type: ignore[no-untyped-def]
-        update = _ORIGINAL_RENDER_UPDATE(self, *args, **kwargs)
-        with contextlib.suppress(Exception):  # measurement only
-            METER["bytes"] += len(update.render_segments(_MEASURE_CONSOLE))  # type: ignore[attr-defined]
-        return update
+    def counting_display(self, screen, renderable):  # type: ignore[no-untyped-def]
+        """Count only the updates Textual would actually write.
+
+        ``App._display`` is where a compositor update becomes terminal output: it skips
+        the write while a batch is open or when the app is closing. Counting earlier than
+        this over-reports work that never reaches a terminal.
+        """
+        if isinstance(renderable, CompositorUpdate) and not self._batch_count and not self._closed:
+            with contextlib.suppress(Exception):
+                METER["bytes"] += len(renderable.render_segments(_MEASURE_CONSOLE))
+        return _ORIGINAL_DISPLAY(self, screen, renderable)
 
     def counting_layout(self, *args, **kwargs):  # type: ignore[no-untyped-def]
         start = time.perf_counter()
@@ -64,7 +71,7 @@ def install_meters() -> None:
             METER["layouts"] += 1
             METER["layout_ms"] += (time.perf_counter() - start) * 1000
 
-    Compositor.render_update = counting_render_update  # type: ignore[method-assign]
+    App._display = counting_display  # type: ignore[method-assign]
     Screen._refresh_layout = counting_layout  # type: ignore[method-assign]
 
 

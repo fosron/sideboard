@@ -174,6 +174,8 @@ class DetailPane(Widget):
         count = len(self.widget_ids)
         available = viewport_height or self.size.height or 0
         if count == 0 or available <= 0:
+            # Hidden (or not yet laid out): sizes are computed when it becomes visible, so
+            # start-up does not mark the screen for layout once per hidden tab.
             return
         even_split = max(self.MIN_CARD_ROWS, available // count)
         for index, widget_id in enumerate(self.widget_ids):
