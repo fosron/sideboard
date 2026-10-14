@@ -272,39 +272,67 @@ def _rendered_text(renderable: object) -> str:
     )
 
 
-async def test_no_panel_repeats_its_attribution_or_interaction_state(tmp_path: Path) -> None:
-    """A card says one thing about time, and the full view says it once.
+#: Phrases that used to be printed somewhere in the dashboard and are not welcome there:
+#: credits, methodology, coverage caveats, warm-up notes and interaction state. A card
+#: shows values; a full view shows more values. Nothing explains itself.
+BANNED_TEXT = (
+    "model-derived",
+    "open-meteo",
+    "valid until",
+    "share is a share",
+    "price change is not",
+    "deposits and withdrawals",
+    "full articles open",
+    "publisher excerpts",
+    "rate baseline",
+    "partial fetch",
+    "no article for",
+    "no forecast is invented",
+    "reported market values",
+    "rates are directed",
+    "nothing is fetched",
+    "cannot cancel or retry",
+    "last successful acquisition",
+    "all metrics reported by",
+    "privileged helper",
+    "saved links are kept locally",
+    "synthetic demo data",
+    "held:",
+    "pinned ·",
+    "as of 1",  # a second timestamp next to "updated"
+)
 
-    The weather card showed "model-derived forecast · Open-Meteo" three times — the view
-    footnote in the body, again as the modal's border subtitle, and again under the daily
-    table — and the modal's chrome listed "pinned · held:interaction · as of 17:00".
+
+async def test_no_screen_prints_explanations_or_credits(tmp_path: Path) -> None:
+    """Every tab, and a full view of two cards, say nothing but values.
+
+    The dashboard is read at a glance from across a room: attribution, methodology notes,
+    coverage caveats and collection warm-up lines are noise there, and they had collected
+    all over the interface.
     """
-    from sideboard.ui.screens import DetailScreen
-
     app = await make_app(tmp_path)
-    async with app.run_test(size=(140, 44)) as pilot:
+    async with app.run_test(size=(150, 44)) as pilot:
         await settle(app, pilot)
-        screen = screen_text(app)
-        assert "held:" not in screen, "interaction state is not provenance"
-        assert "pinned ·" not in screen
-        assert "Open-Meteo" not in screen, "the card carries the weather, not the credits"
+        screens: dict[str, str] = {"overview": screen_text(app)}
+        for tab_id in ("money", "read", "dev", "watch", "life", "systems"):
+            app._run_command(f"tab:{tab_id}")
+            await pilot.pause()
+            screens[tab_id] = screen_text(app)
 
-        card = app._card_for_widget("weather")
-        assert card is not None
-        card.focus()
-        await pilot.press("enter")
-        await pilot.pause()
-        modal = app.screen
-        assert isinstance(modal, DetailScreen)
-        wrapper = modal.query_one("#sb-detail")
-        subtitle = str(wrapper.border_subtitle or "")
-        assert "held" not in subtitle and "pinned" not in subtitle
-        assert "updated " in subtitle or "as of " in subtitle, subtitle
-        assert subtitle.count("·") <= 2, f"the chrome should stay short: {subtitle!r}"
+        # …and the full view of two very different cards.
+        for tab_id, widget_id in (("life", "weather"), ("money", "portfolio")):
+            app._run_command(f"tab:{tab_id}")
+            await pilot.pause()
+            card = app._card_for_widget(widget_id)
+            assert card is not None, f"{widget_id} is not on the {tab_id} tab"
+            card.focus()
+            await pilot.press("enter")
+            await pilot.pause()
+            screens[f"modal:{widget_id}"] = screen_text(app)
+            await pilot.press("escape")
+            await pilot.pause()
 
-        head = modal.query_one("#sb-detail-head")
-        # Static wraps what it was given in a Visual; the Rich renderable is inside it.
-        body = _rendered_text(head.visual._renderable)  # type: ignore[attr-defined]
-        assert body.count("Open-Meteo") == 1, body
-        assert "model-derived" not in body or body.count("model-derived") == 1
-    await app.runtime.database.aclose()
+        for name, text in screens.items():
+            lowered = text.lower()
+            for phrase in BANNED_TEXT:
+                assert phrase not in lowered, f"{name} still prints {phrase!r}"

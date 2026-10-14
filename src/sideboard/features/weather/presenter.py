@@ -427,9 +427,9 @@ def _rain_window(
 
 
 def _subtitle(payload: WeatherPayload, zone: ZoneInfo) -> str:
-    if payload.as_of is None:
-        return payload.timezone
-    return f"{payload.timezone} · updated {payload.as_of.astimezone(zone):%H:%M}"
+    """Which zone the forecast times are in. The "updated" time is the chrome's job."""
+    _ = zone
+    return payload.timezone
 
 
 def _footnote(payload: WeatherPayload, zone: ZoneInfo) -> str:

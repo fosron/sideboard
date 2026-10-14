@@ -191,12 +191,21 @@ def present_summary(inputs: PresentInput) -> ViewModel:
             )
         )
 
-    # On the card a note has to be a problem. Warm-up and provenance notes ("rate baseline
-    # reset for: …") are true and belong in the detail view; on the card they were a
-    # sentence about measurement wrapped under a row of numbers.
-    notes = list(payload.notes) if detail else []
     if unexpected:
-        notes.insert(0, "expected running but stopped: " + ", ".join(sorted(unexpected)))
+        # A service that should be up and is not is the one thing here worth a row of its
+        # own, so it is a metric rather than a footnote sentence.
+        metrics.append(
+            Metric(
+                id="expected_stopped",
+                label="expected up",
+                value_text=f"{len(unexpected)} stopped",
+                basis=", ".join(sorted(unexpected)),
+                privacy=Privacy.PRIVATE,
+                severity=Severity.WARNING,
+            )
+        )
+    # No footnote line: collection notes ("rate baseline reset for: …") are recorded in the
+    # payload and not drawn anywhere.
     subtitle = None
     if payload.engine.server_version:
         subtitle = f"{payload.engine.name or 'engine'} {payload.engine.server_version}"
@@ -207,9 +216,7 @@ def present_summary(inputs: PresentInput) -> ViewModel:
         subtitle=subtitle,
         metrics=tuple(metrics),
         status=status,
-        # Notes are problems ("expected running but stopped"), so they stay on the card;
-        # on a card with nothing wrong they are absent rather than a reassurance line.
-        footnote=" · ".join(notes) if notes else None,
+        footnote=None,
     )
 
 

@@ -96,7 +96,12 @@ that feature. It is pure:
   actually be drawn at, so a presenter can choose a short label that fits instead of
   letting the renderer cut it off;
 * use stable IDs for metrics, items and rows; state money arithmetic in the feature, not
-  in a generic string formatter.
+  in a generic string formatter;
+* fill `basis`, `note` and `footnote` for the record — they document where a number came
+  from — but do not expect them on screen: **the dashboard does not draw explanations**.
+  A card shows label and value; a full view shows more of the same. A `StatusView` is the
+  way to say something is wrong, and a metric with `severity=WARNING` is the way to mark a
+  value that needs attention.
 
 Register the widget type in that feature's `FEATURE`; the host then exposes it to
 configuration validation, `features list` and the palette automatically. Reuse the

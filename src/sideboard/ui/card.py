@@ -488,24 +488,19 @@ class CardShell(Widget, can_focus=True):
         if view.status is not None and has_body:
             sections.append(Text(""))
             sections.append(render_status(view.status, width=width))
-        if view.footnote:
-            sections.append(Text(""))
-            sections.append(Text(single_line(view.footnote, width), style=DIM))
+        # No footnote line: the dashboard does not print explanations, caveats or credits.
+        # A presenter may still record one (the field is part of the widget contract), but
+        # a card is read at a glance and a sentence about methodology is not part of it.
         if not sections:
             sections.append(Text("no data", style=DIM))
         return Group(*sections)
 
 
 def _table_footnote(table: object, width: int) -> Text:
-    parts: list[str] = []
-    if getattr(table, "truncated", False):
-        parts.append("truncated")
-    note = getattr(table, "footnote", None)
-    if note:
-        parts.append(control_free(note))
-    if not parts:
+    """Only the one thing a table cannot show by itself: that it is cut short."""
+    if not getattr(table, "truncated", False):
         return Text("")
-    return Text(single_line(" · ".join(parts), width), style=DIM)
+    return Text(single_line("truncated", width), style=DIM)
 
 
 def signature_of(*values: object) -> int:

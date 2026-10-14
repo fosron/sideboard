@@ -140,9 +140,14 @@ reference on screen. The tabs are the first row, so the cards get the rest of th
   ("held", "pinned") is visible from the border itself, and coverage ("partial") is stated
   next to the numbers it qualifies. The full view repeats the same line in the same place,
   so a card and its detail can never disagree about when the data arrived.
-* **Attribution appears once.** Open-Meteo is credited in the weather view's footnote, not
-  again under the daily table, and not on the card at all. Explanations that a card does
-  not need (ranking basis, price-return caveats, coverage notes) live in the full view.
+* **Nothing explains itself on screen.** Attribution, methodology notes, coverage caveats,
+  collection warm-up lines ("rate baseline reset"), ranking bases and interaction state are
+  recorded in the payload and in the widget contract but **not drawn anywhere** — not on a
+  card, not in a full view, not under a table. A card shows values; a full view shows more
+  values. The only extra words allowed are real states: a source that has no data yet, a
+  service expected up that is not, a table cut short ("truncated"), a degraded connection,
+  and the one `stale`/`expired` word on the timestamp line.
+* **A missing value is an em dash.** Why it is missing is not printed beside it.
 * **A modal closes when you click outside it.** The detail, help, palette and theme
   pickers are centred with a margin all round; clicking that margin dismisses them, and a
   click inside does not (clicks bubble from children, so the test is against the content

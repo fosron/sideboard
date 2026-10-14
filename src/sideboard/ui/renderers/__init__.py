@@ -37,9 +37,9 @@ __all__ = [
 
 
 def _unavailable_note(metric: Metric) -> str:
-    if metric.note:
-        return single_line(metric.note, 40)
-    return "unavailable"
+    """A missing value is an em dash. Why it is missing is not printed on a card."""
+    _ = metric
+    return "—"
 
 
 def render_metrics(

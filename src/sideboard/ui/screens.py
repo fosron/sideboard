@@ -71,8 +71,6 @@ def render_view_body(
         sections.append(
             render_table(view.table, width=width, privacy=privacy, selected_index=selected_index)
         )
-        if view.table.footnote:
-            sections.append(Text(single_line(view.table.footnote, width), style=DIM))
     if view.items and not items_as_rows:
         # The modal renders each item as its own widget so a click can land on it; every
         # other caller gets the whole list as one renderable.
@@ -85,8 +83,7 @@ def render_view_body(
                 max_rows=200,
             )
         )
-    if view.footnote:
-        sections.append(Text(single_line(view.footnote, width), style=DIM))
+    # Deliberately no footnote line: explanations and credits are not drawn anywhere.
     if not sections:
         sections.append(Text("no data", style=DIM))
     return Group(*sections)
@@ -185,9 +182,7 @@ class DetailScreen(DismissOnOutsideClick, ModalScreen[None]):
     def compose(self) -> object:
         wrapper = VerticalScroll(id="sb-detail")
         wrapper.border_title = single_line(self.view_title, 60)
-        # The same one timestamp the card shows, in the same place a card puts it. The
-        # view's own footnote is rendered once, in the body, where it can be read in full
-        # instead of being cut to fit a border.
+        # The same one timestamp the card shows, in the same place a card puts it.
         wrapper.border_subtitle = single_line(self.freshness, 60) or None
         yield wrapper
 
@@ -196,7 +191,6 @@ class DetailScreen(DismissOnOutsideClick, ModalScreen[None]):
         wrapper.mount(Static(id="sb-detail-head"))
         for index in range(len(self.view.items)):
             wrapper.mount(DetailRow(index, Text("")))
-        wrapper.mount(Static(id="sb-detail-foot"))
         self._refresh_body()
 
     def _row_widgets(self) -> list[DetailRow]:
@@ -234,13 +228,6 @@ class DetailScreen(DismissOnOutsideClick, ModalScreen[None]):
                 ),
                 layout=False,
             )
-        foot = self.query_one("#sb-detail-foot", Static)
-        foot.update(
-            Text(single_line(self.view.footnote or "", width), style=DIM)
-            if self.view.footnote
-            else Text(""),
-            layout=False,
-        )
 
     def _rows(self) -> int:
         """Rows the cursor can reach: the table when there is one, otherwise the items."""

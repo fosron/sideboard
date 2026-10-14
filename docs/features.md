@@ -53,6 +53,10 @@ widget consumes owns no recurring task at all.
 | `diagnostics.sources` | — (host-owned) | infrastructure | counts and short table | full source table and setup problems |
 | `diagnostics.host` | — (host-owned) | infrastructure | mode, config revision, paths | same with pending writes |
 
+Footnotes, metric bases and payload notes are recorded by presenters for the record and
+are **not rendered**: the dashboard prints values, and a `StatusView` or a warning-severity
+metric is how it reports a problem. The one annotation a table may carry is `truncated`.
+
 A widget with an `optional` input renders an honest state when that binding is absent.
 `news.saved`, `diagnostics.*` and `local_snapshot.*` need no collector at all.
 
