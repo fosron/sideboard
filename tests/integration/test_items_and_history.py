@@ -126,3 +126,44 @@ async def test_history_aggregate_is_throttled_to_one_per_minute(tmp_path: Path) 
         assert rows[0]["n"] == 1
     finally:
         await database.aclose()
+
+
+async def test_saved_items_merge_live_items_and_bookmarks(tmp_path: Path) -> None:
+    """Both stores contribute: a recent save must not hide older bookmarks.
+
+    A bookmark row is written for every saved item that passes retention, precisely so the
+    link survives if the item row ever goes away. ``saved_items()`` returned the items rows
+    *instead of* the bookmarks whenever any live saved item existed, so those links were
+    invisible from the moment one new item was saved.
+    """
+    store, database = await _store(tmp_path)
+    try:
+        await store.upsert(
+            "reddit",
+            "thread",
+            [record("reddit:old", source_id="reddit", published=NOW)],
+            now=NOW,
+            retention_seconds=3600,
+        )
+        await store.set_state("reddit:old", saved=True, now=NOW)
+        # Passing retention writes the bookmark and keeps the row, as the purge does.
+        removed = await store.purge_expired(NOW + timedelta(hours=2))
+        assert removed == 0
+        assert [row.item_id for row in await store.saved_items()] == ["reddit:old"]
+
+        later = NOW + timedelta(hours=3)
+        await store.upsert("news", "article", [record("news:new", published=later)], now=later)
+        await store.set_state("news:new", saved=True, now=later)
+        # The older item's row goes away (any cleanup path may do this); its bookmark stays.
+        await database.execute("DELETE FROM items WHERE item_id = ?", ("reddit:old",))
+
+        saved = await store.saved_items()
+        ids = [row.item_id for row in saved]
+        assert set(ids) == {"reddit:old", "news:new"}, ids
+        assert ids[0] == "news:new", "newest first"
+        live = next(row for row in saved if row.item_id == "news:new")
+        bookmark = next(row for row in saved if row.item_id == "reddit:old")
+        assert live.category == "world"
+        assert bookmark.kind == "bookmark" and bookmark.url == "https://example.com/a"
+    finally:
+        await database.aclose()

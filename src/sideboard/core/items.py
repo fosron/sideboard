@@ -173,6 +173,13 @@ class ItemStore:
         return updated
 
     async def saved_items(self, *, limit: int = 100) -> tuple[ItemRecord, ...]:
+        """Every saved link, from both stores.
+
+        Provider items carry their metadata until retention removes them; a bookmark keeps
+        the link and title afterwards. Merging the two is the only way the list is
+        complete: returning the items rows *instead of* the bookmarks hid five older
+        bookmarks as soon as one recent saved item existed in the items table.
+        """
         rows = await self.database.fetchall(
             """
             SELECT i.item_id, i.source_id, i.kind, i.title, i.subtitle, i.url, i.category,
@@ -184,24 +191,33 @@ class ItemStore:
             """,
             (limit,),
         )
-        if rows:
-            return tuple(_row_to_record(row) for row in rows)
+        merged: dict[str, ItemRecord] = {str(row["item_id"]): _row_to_record(row) for row in rows}
         bookmark_rows = await self.database.fetchall(
             "SELECT item_id, source_id, title, url, saved_at FROM saved_links "
             "ORDER BY saved_at DESC LIMIT ?",
             (limit,),
         )
-        return tuple(
-            ItemRecord(
-                item_id=str(row["item_id"]),
-                source_id=str(row["source_id"]),
-                kind="bookmark",
-                title=str(row["title"]),
-                url=row["url"],
-                published_at=_parse(str(row["saved_at"])),
+        for row in bookmark_rows:
+            # A live item wins: it has the subtitle, category and publication date. The
+            # bookmark is the fallback for content retention has already removed.
+            merged.setdefault(
+                str(row["item_id"]),
+                ItemRecord(
+                    item_id=str(row["item_id"]),
+                    source_id=str(row["source_id"]),
+                    kind="bookmark",
+                    title=str(row["title"]),
+                    url=row["url"],
+                    published_at=_parse(str(row["saved_at"])),
+                ),
             )
-            for row in bookmark_rows
+        ordered = sorted(
+            merged.values(),
+            key=lambda record: (
+                -(record.published_at.timestamp() if record.published_at is not None else 0.0)
+            ),
         )
+        return tuple(ordered[:limit])
 
     async def purge_expired(self, now: datetime) -> int:
         """Delete provider content past retention, preserving saved links.

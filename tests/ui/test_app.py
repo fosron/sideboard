@@ -412,3 +412,103 @@ def _registry():
 
 def test_utc_now_is_available() -> None:
     assert datetime.now(UTC).tzinfo is not None
+
+
+async def test_the_saved_card_lists_what_was_saved(tmp_path: Path) -> None:
+    """Saving an item has to show up somewhere.
+
+    `present_saved` reads `view_context.saved_items`, which the host never populated: the
+    Saved card said "Nothing saved yet" while `s` marked items saved and the store held
+    them.
+    """
+    app = await make_app(tmp_path)
+    async with app.run_test(size=(140, 44)) as pilot:
+        await settle(app, pilot)
+        card = next(
+            card
+            for card in app._all_cards()
+            if card.widget_id == "news" and card.view is not None and card.view.items
+        )
+        assert card.view is not None
+        item = card.view.items[0]
+        await app._toggle_saved(item.id)
+        await pilot.pause()
+        view, _ = app.present("saved")
+        assert view is not None
+        assert [entry.id for entry in view.items] == [item.id], "the saved item must be listed"
+        assert view.items[0].saved is True
+
+        await app._toggle_saved(item.id)
+        await pilot.pause()
+        view, _ = app.present("saved")
+        assert view is not None and view.items == ()
+        assert view.status is not None and "Nothing saved" in view.status.headline
+    await app.runtime.database.aclose()
+
+
+async def test_a_link_to_the_local_network_is_refused(tmp_path: Path, monkeypatch) -> None:
+    """Feed links are untrusted input; "open" must not reach 127.0.0.1.
+
+    The validation error used to be suppressed and the URL handed to the browser anyway,
+    so a feed item pointing at the router or a local service was opened on one key press.
+    """
+    app = await make_app(tmp_path)
+    opened: list[str] = []
+    monkeypatch.setattr(
+        SideboardApp, "_hand_to_browser", lambda self, url: opened.append(url) or True
+    )
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        for blocked in (
+            "http://127.0.0.1:8080/admin",
+            "http://localhost/",
+            "http://192.168.1.1/",
+            "http://[::1]/",
+        ):
+            app.open_validated_url(blocked)
+        await pilot.pause()
+        assert opened == [], "a private or loopback link must never be opened"
+        notices = [str(note.message) for note in app._notifications]
+        assert any("Refused to open" in note for note in notices), notices
+    await app.runtime.database.aclose()
+
+
+async def test_privacy_mode_survives_a_restart_and_follows_the_configuration(
+    tmp_path: Path,
+) -> None:
+    """`v` is remembered; editing the file still wins.
+
+    The toggle was written to app_state and never read back, so a restart showed amounts
+    again, and `candidate.privacy_mode or self.privacy` meant privacy could not be turned
+    off by editing the configuration once it had been enabled in a session.
+    """
+    app = await make_app(tmp_path)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        assert app.privacy is False
+        app.action_toggle_privacy()
+        await pilot.pause()
+        assert app.privacy is True
+    await app.runtime.database.aclose()
+
+    # A fresh process, the same database: the choice is still in force.
+    restarted = await make_app(tmp_path)
+    async with restarted.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        assert restarted.privacy is True, "privacy mode must be restored, not just stored"
+
+        # …and the configuration is authoritative when it is reloaded: write the file with
+        # privacy off and go through the real reload path.
+        from sideboard.core.config import shipped_defaults
+
+        document = shipped_defaults()
+        document["app"]["privacy_mode"] = False
+        restarted.runtime.paths.config_file.write_text(_to_toml(document), encoding="utf-8")
+        await restarted._reload_config()
+        await pilot.pause()
+        assert restarted.privacy is False, "a reload must be able to turn privacy off"
+        row = await restarted.runtime.database.fetchone(
+            "SELECT value FROM app_state WHERE key = 'privacy_mode'"
+        )
+        assert row is not None and str(row["value"]) == "0", "the stored value must agree"
+    await restarted.runtime.database.aclose()

@@ -35,6 +35,7 @@ from .core.config import (
     shipped_defaults,
 )
 from .core.contracts import (
+    Item,
     ItemState,
     RuntimeStatus,
     SourceEnvelope,
@@ -42,7 +43,7 @@ from .core.contracts import (
     ViewMode,
     ViewModel,
 )
-from .core.errors import ConfigError
+from .core.errors import BlockedError, ConfigError
 from .core.history import BoundedHistory
 from .core.items import ItemRecord, ItemStore
 from .core.paths import Paths
@@ -217,6 +218,7 @@ class SideboardApp(App[None]):
         self._runtime_pins: set[str] = set()
         self._item_state: dict[str, ItemState] = {}
         self._saved_ids: frozenset[str] = frozenset()
+        self._saved_items: tuple[Item, ...] = ()
         self._read_ids: frozenset[str] = frozenset()
         self._runtime_status: RuntimeStatus | None = None
         self._rotation: RotationController | None = None
@@ -271,6 +273,7 @@ class SideboardApp(App[None]):
 
     async def on_mount(self) -> None:
         self._runtime_status = self.runtime.scheduler.runtime_status()
+        await self._load_privacy_mode()
         await self._load_item_state()
         await self._build_tabs()
         self._present_everything()
@@ -455,6 +458,7 @@ class SideboardApp(App[None]):
             offline=self.offline,
             demo=self.demo,
             saved_ids=self._saved_ids,
+            saved_items=self._saved_items,
             read_ids=self._read_ids,
             item_states=self._item_state,
             runtime=self._runtime_status,
@@ -1053,8 +1057,19 @@ class SideboardApp(App[None]):
         if parts.scheme not in {"http", "https"} or not parts.hostname:
             self.notify(f"Refused to open a non-HTTP(S) link: {parts.scheme or '(none)'}")
             return
-        with contextlib.suppress(Exception):
+        try:
             validate_public_url(url)
+        except BlockedError as error:
+            # A feed is untrusted input: "open this link" must not become a request to
+            # 127.0.0.1, the router or anything else on the local network. Suppressing the
+            # error here (which is what this did) opened exactly those links.
+            log.warning("refused to open %s: %s", url, error.message)
+            self.notify(
+                f"Refused to open {parts.hostname}: {error.message}",
+                severity="warning",
+                timeout=12,
+            )
+            return
         if self._hand_to_browser(url):
             self.notify(f"Opening {parts.hostname} in your browser")
         else:
@@ -1161,6 +1176,20 @@ class SideboardApp(App[None]):
         self._present_everything()
         self._update_chrome(force=True)
         self.notify("Privacy mode on" if self.privacy else "Privacy mode off")
+
+    async def _load_privacy_mode(self) -> None:
+        """Restore the last explicit privacy choice, so a restart does not reveal amounts.
+
+        The configuration sets the starting point; a toggle during a session is remembered.
+        Without this, `v` was persisted and never read back, so the setting appeared to
+        survive in the database and not in the application.
+        """
+        with contextlib.suppress(Exception):
+            row = await self.runtime.database.fetchone(
+                "SELECT value FROM app_state WHERE key = 'privacy_mode'"
+            )
+            if row is not None:
+                self.privacy = str(row["value"]) == "1"
 
     async def _persist_privacy(self) -> None:
         with contextlib.suppress(Exception):
@@ -1314,7 +1343,11 @@ class SideboardApp(App[None]):
         previous_tab = self._active_tab
         await self.runtime.scheduler.reconfigure(candidate)
         self.runtime.config = candidate
-        self.privacy = candidate.app.privacy_mode or self.privacy
+        # The configuration is authoritative on reload, in both directions: "or" here
+        # meant a session that had ever enabled privacy could not be turned off again by
+        # editing the file.
+        self.privacy = candidate.app.privacy_mode
+        await self._persist_privacy()
         self.timezone = candidate.app.timezone
         await self._load_item_state()
         await self._build_tabs(preserve=previous_tab)
@@ -1464,6 +1497,11 @@ class SideboardApp(App[None]):
         self._read_ids = await store.ids_with_state("read")
         tracked = await self._tracked_item_ids()
         self._item_state = dict(await store.states(tracked))
+        # The Saved widget is built from this, not from the cards on screen: a saved link
+        # must survive its source rotating away, and the provider content expiring.
+        self._saved_items = tuple(
+            record.to_item(ItemState(saved=True)) for record in await store.saved_items()
+        )
 
     async def _tracked_item_ids(self) -> tuple[str, ...]:
         ids: list[str] = []
