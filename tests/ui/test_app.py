@@ -326,13 +326,54 @@ async def test_hold_release_restores_rotation(tmp_path: Path) -> None:
 async def test_open_url_refuses_a_non_http_link(tmp_path: Path, monkeypatch) -> None:
     app = await make_app(tmp_path)
     opened: list[str] = []
-    monkeypatch.setattr("webbrowser.open", lambda url, **kwargs: opened.append(url) or True)
+    monkeypatch.setattr(
+        SideboardApp, "_hand_to_browser", lambda self, url: opened.append(url) or True
+    )
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
         app.open_validated_url("file:///etc/passwd")
         assert opened == []
         app.open_validated_url("https://example.com/article")
         assert opened == ["https://example.com/article"]
+
+
+async def test_handing_a_url_to_the_desktop_is_explicit(tmp_path: Path, monkeypatch) -> None:
+    """macOS opens the URL with ``open``, and a failure is reported instead of claimed.
+
+    ``webbrowser`` on macOS drives ``osascript``, which Automation permissions can refuse
+    while returning quietly — the user saw "Opened news.ycombinator.com" and no browser.
+    """
+    from types import SimpleNamespace
+
+    from sideboard import app as app_module
+
+    app = await make_app(tmp_path)
+    recorded: list[list[str]] = []
+
+    class FakePopen:
+        def __init__(self, args, **kwargs):  # type: ignore[no-untyped-def]
+            recorded.append(list(args))
+
+    monkeypatch.setattr(app_module, "sys", SimpleNamespace(platform="darwin"))
+    monkeypatch.setattr(app_module.subprocess, "Popen", FakePopen)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        app.open_validated_url("https://example.com/article")
+        await pilot.pause()
+        assert recorded == [["/usr/bin/open", "https://example.com/article"]]
+        notices = [str(note.message) for note in app._notifications]
+        assert any("example.com" in note for note in notices), notices
+
+        def refuse(args, **kwargs):  # type: ignore[no-untyped-def]
+            raise OSError("no desktop session")
+
+        monkeypatch.setattr(app_module.subprocess, "Popen", refuse)
+        app.open_validated_url("https://example.com/other")
+        await pilot.pause()
+        notices = [str(note.message) for note in app._notifications]
+        assert any("Could not open" in note and "example.com/other" in note for note in notices), (
+            notices
+        )
 
 
 def _to_toml(document: dict) -> str:

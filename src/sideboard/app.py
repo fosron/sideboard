@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import subprocess
+import sys
 import webbrowser
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
@@ -1050,9 +1052,41 @@ class SideboardApp(App[None]):
             return
         with contextlib.suppress(Exception):
             validate_public_url(url)
+        if self._hand_to_browser(url):
+            self.notify(f"Opening {parts.hostname} in your browser")
+        else:
+            # Say what happened and put the link on screen: a silent failure looks like a
+            # key that does nothing, which is what "o does not work" turned out to be.
+            log.warning("could not hand %s to a browser", url)
+            self.notify(
+                f"Could not open a browser for {url}",
+                severity="warning",
+                timeout=12,
+            )
+
+    def _hand_to_browser(self, url: str) -> bool:
+        """Give the URL to the desktop and report whether it was accepted.
+
+        ``webbrowser`` is the portable answer, but on macOS it drives ``osascript``, which
+        can be refused by Automation permissions and then returns quietly. ``open`` is the
+        documented way to open a URL in the default browser on macOS and needs no such
+        permission; it is spawned detached so a slow browser launch cannot stall the UI.
+        """
+        if sys.platform == "darwin":
+            try:
+                subprocess.Popen(
+                    ["/usr/bin/open", url],
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True,
+                )
+            except OSError:
+                return False
+            return True
         with contextlib.suppress(Exception):
-            webbrowser.open(url, new=2, autoraise=False)
-        self.notify(f"Opened {parts.hostname}")
+            return bool(webbrowser.open(url, new=2, autoraise=False))
+        return False
 
     def action_save_item(self) -> None:
         card = self.focused_card()

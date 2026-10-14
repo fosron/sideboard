@@ -136,20 +136,28 @@ def render_items(
         hide = privacy and raw.privacy is Privacy.PRIVATE
         style = READ if raw.read else ITEM
         badge = f" [{single_line(raw.badge, 20)}]" if raw.badge else ""
-        # The badge is part of the row, not a row of its own: truncating the title to the
-        # full width pushed the badge onto a second line, which read as a stray label
-        # under a headline that had already been cut off.
-        title_room = max(12, width - 6 - len(badge))
-        line.append(single_line(raw.title, title_room), style=style)
-        if badge:
-            line.append(badge, style=DIM)
+        meta_text = ""
         if raw.meta and width >= 60:
             meta_parts = []
             for key, value in raw.meta[:3]:
                 text = "••••" if hide else single_line(value, 18)
                 meta_parts.append(f"{single_line(key, 8)} {text}")
+            meta_text = " · ".join(meta_parts)
+        # One item, one row. The title is truncated to what the badge and the stats do not
+        # need, and the stats are capped at a third of the row: a headline plus a long
+        # "pts 220 · c 77 · age 3h" used to overflow and wrap, so half the rows in a list
+        # card were a wrapped fragment with a stray "age 2h" on the line below.
+        room = max(12, width - 4)  # cursor and saved marker
+        if meta_text:
+            meta_text = single_line(meta_text, max(8, room // 3))
+            room -= len(meta_text) + 2
+        title_room = max(12, room - len(badge))
+        line.append(single_line(raw.title, title_room), style=style)
+        if badge:
+            line.append(badge, style=DIM)
+        if meta_text:
             line.append("  ")
-            line.append(" · ".join(meta_parts), style=DIM)
+            line.append(meta_text, style=DIM)
         rows.append(line)
         if raw.subtitle and width >= 60:
             sub = Text("     ")

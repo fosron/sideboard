@@ -277,3 +277,41 @@ async def test_help_lists_every_key_the_dashboard_has(tmp_path: Path) -> None:
         await pilot.pause()
         assert not isinstance(app.screen, HelpScreen)
     await app.runtime.database.aclose()
+
+
+def test_a_list_row_never_wraps() -> None:
+    """One item is one row: the title is truncated so the stats fit beside it.
+
+    The HN card rendered "Amazon pushes up prices across the Internet  pts 88 · c 56 ·
+    age 2h" at a card width of 76 and the stats wrapped onto a second line, so half the
+    rows read as a headline followed by a stray "age 2h".
+    """
+    from sideboard.core.contracts import Item, Privacy
+    from sideboard.ui.renderers import render_items
+
+    items = tuple(
+        Item(
+            id=f"item:{index}",
+            title="Iosevka is an open-source, sans-serif and slab-serif, monospaced font",
+            meta=(("pts", "220"), ("c", "77"), ("age", "3h")),
+            privacy=Privacy.PUBLIC,
+        )
+        for index in range(4)
+    )
+    for width in (40, 60, 76, 100):
+        group = render_items(items, width=width, privacy=False, selected_index=0)
+        for line in group.renderables:  # type: ignore[attr-defined]
+            assert len(line.plain) <= width, f"{width} columns: {line.plain!r} overflows"
+
+    badged = (
+        Item(
+            id="item:badge",
+            title="A headline that is deliberately much longer than the card is wide",
+            badge="world",
+            meta=(("cat", "personal finance"),),
+            privacy=Privacy.PUBLIC,
+        ),
+    )
+    group = render_items(badged, width=60, privacy=False)
+    for line in group.renderables:  # type: ignore[attr-defined]
+        assert len(line.plain) <= 60, line.plain
