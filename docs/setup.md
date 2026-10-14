@@ -170,8 +170,11 @@ except `r` closes it again. `Ctrl+Y` releases every hold, and
 `uv run sideboard --no-mouse` turns hover off entirely. Selection, pausing and
 navigation all work from the keyboard, so nothing is lost.
 
-Terminal requirements: any terminal that reports its size. No Nerd Font, image
-protocol, gradient, special colour scheme or emoji meaning is required.
+Terminal requirements: any terminal that reports its size. No Nerd Font, image protocol,
+gradient or special colour scheme is required. The weather card carries one symbol per
+condition (☀ ☼ ⛅ ☁ ☔ ❄ ⛈ ≡): plain Unicode in its *text* presentation — the emoji-default
+ones carry U+FE0E — so they are one cell wide, and the word beside each symbol says the
+same thing for a font that lacks it.
 
 ### How a tab is laid out
 

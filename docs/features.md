@@ -31,7 +31,7 @@ widget consumes owns no recurring task at all.
 
 | Widget type | Accepted inputs | Category | Compact view | Detail view |
 |---|---|---|---|---|
-| `weather.summary` | `primary`: weather.forecast | world | temperature, wind, rain next 6 h | current conditions, the next hours, then the 7-day table |
+| `weather.summary` | `primary`: weather.forecast | world | temperature with the current-weather symbol, wind, rain next 6 h | current conditions, the next hours, then the 7-day table |
 | `news.digest` | `primary`: news.feeds | world | deterministic diversity digest | per-bucket list plus feed health |
 | `news.saved` | — (local state) | world | saved reading/video links | same list, longer |
 | `hackernews.list` | `primary`: hackernews.stories | software | ranked item list | up to 30 items |
@@ -52,6 +52,11 @@ widget consumes owns no recurring task at all.
 | `local_snapshot.items` | `primary`: local_snapshot.file (optional) | infrastructure | producer items | longer item list |
 | `diagnostics.sources` | — (host-owned) | infrastructure | counts and short table | full source table and setup problems |
 | `diagnostics.host` | — (host-owned) | infrastructure | mode, config revision, paths | same with pending writes |
+
+The weather card prefixes the current temperature with one symbol for the WMO code
+(`weather_icon`): text-presentation Unicode, one cell wide, no Nerd Font and no emoji
+presentation, and nothing at all for a code it does not know — an icon that guesses is
+worse than none. It is the only icon in the interface.
 
 Weather rows link to the location's public forecast page
 (`yr.no/en/forecast/daily-table/<lat>,<lon>`, built from the coordinates the source was

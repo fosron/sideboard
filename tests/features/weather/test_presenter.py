@@ -61,7 +61,8 @@ def test_compact_reports_the_core_metrics(sample_payload, make_envelope) -> None
         "rain_chance_6h",
     }
     temperature = metrics["temperature"]
-    assert temperature.value_text == "18.4"
+    # The value carries the current-weather icon (see the icon test below).
+    assert temperature.value_text.endswith("18.4")
     assert temperature.unit == "°C"
     assert temperature.numeric == 18.4
     assert temperature.basis == "forecast"
@@ -322,3 +323,44 @@ def test_an_hour_that_is_not_today_carries_its_weekday(sample_payload, make_enve
     titles = [item.title for item in view.items]
     assert any(title.split(" · ")[0].count(" ") == 1 for title in titles), titles
     assert any(":" in title for title in titles)
+
+
+def test_the_current_weather_carries_one_icon(sample_payload, make_envelope) -> None:
+    """One symbol on the temperature, and only when the code is known.
+
+    A double-width emoji would break the metric grid, so every icon is a text-presentation
+    symbol — the emoji-default ones carry U+FE0E — and an unknown code gets no icon rather
+    than a guessed one.
+    """
+    from sideboard.features.weather.presenter import weather_icon
+
+    assert weather_icon(0) == "\u2600"
+    assert weather_icon(None) == ""
+    assert weather_icon(1234) == ""
+    for code, icon in list(_ALL_ICONS().items()):
+        assert icon, code
+        # Text presentation: the emoji-default symbols must carry the variation selector.
+        if icon[0] in {"\u26c5", "\u2614", "\u26c8"}:
+            assert icon.endswith("\ufe0e"), (code, icon)
+
+    view = present(
+        PresentInput(
+            settings=WeatherWidgetSettings(),
+            inputs={"primary": make_envelope(sample_payload)},
+            context=ViewContext(now=NOW, width=80, height=24),
+        )
+    )
+    temperature = next(metric for metric in view.metrics if metric.id == "temperature")
+    assert temperature.value_text.startswith("\u26c5"), temperature.value_text
+    assert temperature.numeric == sample_payload.current.temperature_c
+    # Only one metric carries it: two icons on one card is noise.
+    with_icon = [
+        m for m in view.metrics if weather_icon(sample_payload.current.weather_code) in m.value_text
+    ]
+    assert len(with_icon) == 1, [m.id for m in with_icon]
+
+
+def _ALL_ICONS() -> dict[int, str]:
+    from sideboard.features.weather.presenter import _WMO_ICON
+
+    return dict(_WMO_ICON)

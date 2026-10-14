@@ -59,6 +59,41 @@ _BASIS_CURRENT = "forecast"
 _BASIS_HOURLY = "hourly forecast"
 _BASIS_DAILY = "daily forecast"
 
+#: One text-presentation Unicode symbol per WMO code group. Deliberately not emoji: a
+#: double-width glyph breaks a metric grid, and the terminal requirements promise no Nerd
+#: Font and no emoji. Where Unicode defaults a symbol to emoji presentation, U+FE0E
+#: (variation selector-15) asks for the text form, which is one cell wide.
+_WMO_ICON: dict[int, str] = {
+    0: "\u2600",  # ☀ clear sky
+    1: "\u263c",  # ☼ mainly clear
+    2: "\u26c5\ufe0e",  # ⛅ partly cloudy
+    3: "\u2601",  # ☁ overcast
+    45: "\u2261",  # ≡ fog
+    48: "\u2261",  # ≡ depositing rime fog
+    51: "\u2602",  # ☂ light drizzle
+    53: "\u2602",  # ☂ moderate drizzle
+    55: "\u2602",  # ☂ dense drizzle
+    56: "\u2602",  # ☂ light freezing drizzle
+    57: "\u2602",  # ☂ dense freezing drizzle
+    61: "\u2614\ufe0e",  # ☔ slight rain
+    63: "\u2614\ufe0e",  # ☔ moderate rain
+    65: "\u2614\ufe0e",  # ☔ heavy rain
+    66: "\u2614\ufe0e",  # ☔ light freezing rain
+    67: "\u2614\ufe0e",  # ☔ heavy freezing rain
+    71: "\u2744",  # ❄ slight snow
+    73: "\u2744",  # ❄ moderate snow
+    75: "\u2744",  # ❄ heavy snow
+    77: "\u2744",  # ❄ snow grains
+    80: "\u2614\ufe0e",  # ☔ slight rain showers
+    81: "\u2614\ufe0e",  # ☔ moderate rain showers
+    82: "\u2614\ufe0e",  # ☔ violent rain showers
+    85: "\u2744",  # ❄ slight snow showers
+    86: "\u2744",  # ❄ heavy snow showers
+    95: "\u26c8\ufe0e",  # ⛈ thunderstorm
+    96: "\u26c8\ufe0e",  # ⛈ thunderstorm with slight hail
+    99: "\u26c8\ufe0e",  # ⛈ thunderstorm with heavy hail
+}
+
 _WMO_TEXT: dict[int, str] = {
     0: "clear sky",
     1: "mainly clear",
@@ -100,6 +135,17 @@ def weather_text(code: int | None) -> str:
     if code is None:
         return "unknown"
     return _WMO_TEXT.get(code, "unknown")
+
+
+def weather_icon(code: int | None) -> str:
+    """One symbol for a WMO code, or an empty string when the code is unknown.
+
+    An empty string rather than a default glyph: an icon that guesses is worse than no
+    icon, and the words beside it already say what the sky is doing.
+    """
+    if code is None:
+        return ""
+    return _WMO_ICON.get(code, "")
 
 
 def present(request: PresentInput) -> ViewModel:
@@ -165,17 +211,21 @@ def _coerce_settings(settings: BaseModel) -> WeatherWidgetSettings:
 
 def _compact_metrics(payload: WeatherPayload) -> tuple[Metric, ...]:
     current = payload.current
+    code = current.weather_code if current else None
     total, total_note, chance, chance_note = _rain_window(payload, _RAIN_HOURS)
     return (
-        _metric(
-            "temperature",
-            "Temp",
-            current.temperature_c if current else None,
-            basis=_BASIS_CURRENT,
-            unit="°C",
-            digits=1,
-            as_of=payload.as_of,
-            note="current conditions not returned" if current is None else None,
+        _with_icon(
+            _metric(
+                "temperature",
+                "Temp",
+                current.temperature_c if current else None,
+                basis=_BASIS_CURRENT,
+                unit="°C",
+                digits=1,
+                as_of=payload.as_of,
+                note="current conditions not returned" if current is None else None,
+            ),
+            code,
         ),
         _conditions_metric(current, payload.as_of),
         _metric(
@@ -215,17 +265,21 @@ def _compact_metrics(payload: WeatherPayload) -> tuple[Metric, ...]:
 
 def _detail_metrics(payload: WeatherPayload) -> tuple[Metric, ...]:
     current = payload.current
+    code = current.weather_code if current else None
     total, total_note, chance, chance_note = _rain_window(payload, _RAIN_HOURS)
     return (
-        _metric(
-            "temperature",
-            "Temp",
-            current.temperature_c if current else None,
-            basis=_BASIS_CURRENT,
-            unit="°C",
-            digits=1,
-            as_of=payload.as_of,
-            note="current conditions not returned" if current is None else None,
+        _with_icon(
+            _metric(
+                "temperature",
+                "Temp",
+                current.temperature_c if current else None,
+                basis=_BASIS_CURRENT,
+                unit="°C",
+                digits=1,
+                as_of=payload.as_of,
+                note="current conditions not returned" if current is None else None,
+            ),
+            code,
         ),
         _metric(
             "apparent",
@@ -400,6 +454,14 @@ def _metric(
     if metric.basis == basis:
         return metric
     return replace(metric, basis=basis)
+
+
+def _with_icon(metric: Metric, code: int | None) -> Metric:
+    """Prefix a metric's value with the weather symbol, when the code is known."""
+    icon = weather_icon(code)
+    if not icon or not metric.available:
+        return metric
+    return replace(metric, value_text=f"{icon} {metric.value_text}")
 
 
 def _conditions_metric(current: CurrentConditions | None, as_of: datetime | None) -> Metric:
