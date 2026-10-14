@@ -98,6 +98,10 @@ read, capped at 1 MiB.
 
 ## 3. Controls
 
+The footer shows one hint, `? help`. Every key is in the help screen (`?`) and in this
+table; the footer deliberately does not list them, because a dashboard read from across a
+room does not need a keyboard reference on screen.
+
 | Input | Action |
 |---|---|
 | `1`–`9` | select the first nine visible tabs, in configured order |

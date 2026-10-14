@@ -730,10 +730,9 @@ class SideboardApp(App[None]):
         if force or tabbar != self._last_tabbar:
             self._last_tabbar = tabbar
             self._update_static("#sb-tabbar", tabbar)
-        footer = (
-            "Arrows walk cards · Enter detail · Space pause · p pin · o open · s save · "
-            "r refresh · v privacy · Ctrl+R reload · Ctrl+P palette · ? help"
-        )
+        # One hint, not a keyboard reference: the dashboard is read from across a room, and
+        # `?` lists every key for the moment someone actually needs one.
+        footer = "? help"
         if force or footer != self._last_footer:
             self._last_footer = footer
             self._update_static("#sb-footer", footer)

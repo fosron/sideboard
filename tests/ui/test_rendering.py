@@ -81,7 +81,9 @@ async def test_overview_shows_real_card_content(tmp_path: Path) -> None:
         # The chrome that used to be everything the user could see.
         assert "Sideboard ·" in text
         assert "Overview" in text and "Systems" in text
-        assert "Space pause" in text
+        # The footer is one hint, not a keyboard reference: `?` opens the list.
+        assert "? help" in text, "the footer must say where the keys are"
+        assert "Space pause" not in text, "keys belong in the help screen, not the footer"
 
         # …and the card content that was missing.
         assert "Demo Equity" in text, "the portfolio table must render its rows"
@@ -256,3 +258,22 @@ def test_focus_held_and_pinned_are_three_different_looks() -> None:
     assert "CardShell:focus" in css and "background: $sb-focus-bg" in css
     pinned = css[css.index("CardShell.sb-pinned") :].split("}")[0]
     assert "sb-border;" in pinned, "a pinned card keeps the plain border"
+
+
+async def test_help_lists_every_key_the_dashboard_has(tmp_path: Path) -> None:
+    """`?` is the only place the keys are listed, so it has to be complete."""
+    from sideboard.ui.screens import HelpScreen
+
+    app = await make_app(tmp_path)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await settle(app, pilot)
+        await pilot.press("question_mark")
+        await pilot.pause()
+        assert isinstance(app.screen, HelpScreen)
+        help_text = screen_text(app)
+        for keys in ("Arrows", "Tab / Shift+Tab", "Enter", "Space", "Ctrl+P", "Ctrl+R", "q"):
+            assert keys in help_text, f"the help screen must mention {keys!r}"
+        await pilot.press("escape")
+        await pilot.pause()
+        assert not isinstance(app.screen, HelpScreen)
+    await app.runtime.database.aclose()

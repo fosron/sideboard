@@ -199,20 +199,24 @@ class HelpScreen(ModalScreen[None]):
 
     HELP_ROWS = (
         ("1–9", "select the first nine visible tabs"),
-        ("Ctrl+P", "command palette: any tab, widget or action"),
-        ("Ctrl+R", "validate and reload configuration"),
-        ("Tab / Shift+Tab", "move focus between cards"),
-        ("Up / Down", "move the selection inside the focused card"),
+        (
+            "Arrows",
+            "walk cards: left/right step across and wrap, up/down follow the grid; "
+            "inside a card the arrows move its rows first",
+        ),
+        ("Tab / Shift+Tab", "next / previous card of the visible tab"),
+        ("Enter / click", "open the detail view (arrows walk it, Esc closes it)"),
         ("Space", "toggle global visual pause (collection continues)"),
         ("p", "pin / unpin the focused overview card"),
         ("n", "advance the focused rotating card, even while paused"),
-        ("Enter / click", "open the detail view"),
         ("o", "open the selected validated link in the browser"),
         ("s", "save / unsave the selected item"),
         ("r", "request a rate-limited refresh of the selected provider"),
         ("v", "privacy mode: hide amounts and private identifiers"),
-        ("Arrows / Tab", "walk cards; left and right wrap, up and down follow the grid"),
-        ("Esc", "close / back"),
+        ("Ctrl+Y", "release every hold"),
+        ("Ctrl+P", "command palette: any tab, any widget, any action"),
+        ("Ctrl+R", "validate and reload configuration"),
+        ("?", "this help"),
         ("q", "quit"),
     )
 
