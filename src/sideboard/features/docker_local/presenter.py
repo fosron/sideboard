@@ -16,6 +16,7 @@ from ...core.contracts import (
     TableColumn,
     TableRow,
     TableView,
+    ViewMode,
     ViewModel,
 )
 from ...core.present import status_from_envelope
@@ -81,6 +82,7 @@ def present_summary(inputs: PresentInput) -> ViewModel:
     if not isinstance(payload, DockerPayload):
         return ViewModel(title="Docker", status=status or _empty())
 
+    detail = inputs.context.mode is ViewMode.DETAIL
     running, stopped, unhealthy, health_unknown = _counts(payload)
     expected = frozenset(payload.expected_running)
     unexpected = [c.name for c in payload.containers if c.name in expected and c.is_unexpected_exit]
@@ -118,11 +120,33 @@ def present_summary(inputs: PresentInput) -> ViewModel:
                 severity=Severity.WARNING if unhealthy or unexpected else Severity.OK,
             )
         )
+    if settings.show_restarts:
+        churn = sum(c.restarts_since_sample or 0 for c in payload.containers)
+        known = any(c.restarts_since_sample is not None for c in payload.containers)
+        if known or detail:
+            # Without a previous sample there is no delta to show. On the card that means
+            # no metric rather than one that says it cannot answer; the detail view keeps
+            # the line and explains it.
+            metrics.append(
+                Metric(
+                    id="restarts",
+                    label="restarts",
+                    value_text=str(churn),
+                    basis=("since the previous sample; lifetime counts are in the container table"),
+                    available=known,
+                    note=(
+                        None
+                        if known
+                        else "no baseline yet: the first sample after a start shows no delta"
+                    ),
+                    severity=Severity.WARNING if churn else Severity.OK,
+                )
+            )
     if settings.show_cpu:
         metrics.append(
             Metric(
                 id="engine_cpu",
-                label="cpu (engine scale)",
+                label="cpu (engine)",
                 value_text=f"{cpu_total:.1f}",
                 unit="%",
                 basis="sum of container CPU on the engine scale, not Mac host CPU",
@@ -140,7 +164,37 @@ def present_summary(inputs: PresentInput) -> ViewModel:
             )
         )
 
-    notes = list(payload.notes)
+    if settings.show_storage:
+        metrics.extend(_storage_metrics(payload, detail=detail))
+    # The totals say the engine is busy; naming the heaviest containers says why. This is
+    # the one part of the summary that answers a question, rather than reporting a state.
+    heaviest = sorted(
+        (c for c in payload.containers if c.running and c.memory_used_bytes is not None),
+        key=lambda c: -(c.memory_used_bytes or 0),
+    )
+    limit = settings.top_containers if not detail else max(settings.top_containers, 8)
+    for container in heaviest[: max(0, limit)]:
+        metrics.append(
+            Metric(
+                id=f"mem_{container.name}",
+                label=f"mem · {container.compose_service or container.name}",
+                value_text=format_bytes(container.memory_used_bytes) or "—",
+                basis=(
+                    f"{container.name}"
+                    + (
+                        f" · {container.cpu_percent:.1f} % cpu"
+                        if container.cpu_percent is not None
+                        else ""
+                    )
+                ),
+                privacy=Privacy.PRIVATE,
+            )
+        )
+
+    # On the card a note has to be a problem. Warm-up and provenance notes ("rate baseline
+    # reset for: …") are true and belong in the detail view; on the card they were a
+    # sentence about measurement wrapped under a row of numbers.
+    notes = list(payload.notes) if detail else []
     if unexpected:
         notes.insert(0, "expected running but stopped: " + ", ".join(sorted(unexpected)))
     subtitle = None
@@ -153,8 +207,61 @@ def present_summary(inputs: PresentInput) -> ViewModel:
         subtitle=subtitle,
         metrics=tuple(metrics),
         status=status,
+        # Notes are problems ("expected running but stopped"), so they stay on the card;
+        # on a card with nothing wrong they are absent rather than a reassurance line.
         footnote=" · ".join(notes) if notes else None,
     )
+
+
+def _storage_metrics(payload: DockerPayload, *, detail: bool) -> list[Metric]:
+    """What Docker is using on disk, from ``docker system df``.
+
+    A container host fills up on images and build cache, which no container-level metric
+    shows. Storage is optional on the source: when it is off, the card says so instead of
+    rendering a zero.
+    """
+    if not payload.storage_available or not payload.storage:
+        if not detail:
+            # On the card, no storage means no storage line: "set include_storage" is a
+            # configuration note that wrapped over two rows under a row of numbers.
+            return []
+        return [
+            Metric.unavailable(
+                "disk",
+                "docker disk",
+                "storage is off or unavailable: set include_storage on the docker source",
+            )
+        ]
+    used = sum(s.size_bytes for s in payload.storage if s.size_bytes is not None)
+    reclaimable = sum(
+        s.reclaimable_bytes for s in payload.storage if s.reclaimable_bytes is not None
+    )
+    out = [
+        Metric(
+            id="disk",
+            label="docker disk",
+            value_text=format_bytes(used) or "—",
+            basis="images, containers, volumes and build cache (docker system df)",
+        ),
+        Metric(
+            id="reclaimable",
+            label="reclaimable",
+            value_text=format_bytes(reclaimable) or "—",
+            basis="what a prune would free",
+            severity=Severity.INFO if reclaimable else Severity.OK,
+        ),
+    ]
+    if detail:
+        for item in payload.storage:
+            out.append(
+                Metric(
+                    id=f"storage_{item.kind}",
+                    label=item.kind,
+                    value_text=format_bytes(item.size_bytes) or "—",
+                    basis=item.note or f"{item.total or 0} total · {item.active or 0} active",
+                )
+            )
+    return out
 
 
 def present_table(inputs: PresentInput) -> ViewModel:

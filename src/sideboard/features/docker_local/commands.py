@@ -258,8 +258,13 @@ def _as_int(value: object) -> int | None:
     return None
 
 
-def classify_cli_failure(stderr: str, returncode: int) -> UnavailableError:
-    """Map a failed Docker CLI call to one of the distinct local states."""
+def classify_cli_failure(stderr: str, returncode: int, *, command: str = "") -> UnavailableError:
+    """Map a failed Docker CLI call to one of the distinct local states.
+
+    The fallback names the command and quotes a bounded, control-free excerpt of what the
+    CLI said. "docker CLI failed with exit code 1" is not a diagnosis: it was logged four
+    times on a real machine with nothing to act on.
+    """
     lowered = stderr.lower()
     if any(pattern in lowered for pattern in _PERMISSION_PATTERNS):
         return UnavailableError(
@@ -273,7 +278,17 @@ def classify_cli_failure(stderr: str, returncode: int) -> UnavailableError:
         )
     if "context" in lowered and any(pattern in lowered for pattern in _CONTEXT_PATTERNS):
         return UnavailableError("the pinned Docker context does not exist", state="context_missing")
-    return UnavailableError(f"docker CLI failed with exit code {returncode}", state="cli_error")
+    detail = " ".join(_control_free(stderr).split())[:120]
+    where = f"docker {command}".strip()
+    message = f"{where} failed with exit code {returncode}"
+    if detail:
+        message = f"{message}: {detail}"
+    return UnavailableError(message, state="cli_error")
+
+
+def _control_free(value: str) -> str:
+    """Strip control characters from CLI output before it reaches a message or a card."""
+    return "".join(char for char in value if char.isprintable() or char == " ")
 
 
 def selected_ids(containers: Sequence[ContainerLike], limit: int) -> tuple[tuple[str, ...], bool]:

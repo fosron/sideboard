@@ -110,8 +110,12 @@ stats_seconds = 15
 metadata_seconds = 30
 background_seconds = 60
 include_projects = []
+# Services you expect to be up. A name listed here that is not running is reported on the
+# summary card, instead of hiding inside the running/total count.
 expected_running = []
-include_storage = false
+# `docker system df` on its own slow cadence. Images, volumes and build cache fill a disk
+# and no container-level metric shows it; the summary card states what a prune would free.
+include_storage = true
 
 [sources.hn]
 type = "hackernews.stories"

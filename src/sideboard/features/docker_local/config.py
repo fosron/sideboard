@@ -52,6 +52,14 @@ class DockerSummarySettings(BaseModel):
     show_unhealthy: bool = True
     show_cpu: bool = True
     show_memory: bool = True
+    #: Restarts since the previous sample: a container that keeps restarting is a real
+    #: signal, and it is invisible in a running/total count.
+    show_restarts: bool = True
+    #: Disk used by images, containers, volumes and build cache, and how much of it a
+    #: prune would free. Needs ``include_storage`` on the docker source.
+    show_storage: bool = True
+    #: How many of the heaviest containers to name, by memory.
+    top_containers: int = 3
 
 
 class DockerTableSettings(BaseModel):

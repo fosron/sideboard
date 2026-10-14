@@ -672,3 +672,93 @@ def test_stopped_container_health_is_history_not_a_live_signal() -> None:
     cells = {row.id: row.cells for row in table.table.rows}
     assert cells["docker:a1"]["health"] == "-"
     assert cells["docker:a2"]["health"] == "unhealthy"
+
+
+def test_summary_names_the_heaviest_containers() -> None:
+    """The totals say the engine is busy; the names say why.
+
+    "running 2/3, cpu 4 %, mem 268 MiB" describes a state without answering a question.
+    The card now names the containers using the memory, largest first.
+    """
+    from sideboard.core.contracts import PresentInput
+    from sideboard.features.docker_local.provider import demo_payload
+
+    view = present_summary(
+        PresentInput(
+            settings=summary_settings(),
+            inputs={"primary": envelope_for(demo_payload())},
+            context=view_context(),
+        )
+    )
+    labels = [metric.label for metric in view.metrics]
+    assert labels.index("mem · db") < labels.index("mem · web"), labels
+    heaviest = view.metric("mem_sideboard-db-1")
+    assert heaviest is not None
+    assert heaviest.value_text == "220.0 MiB"
+    assert "124.5 % cpu" in (heaviest.basis or "")
+
+
+def test_summary_reports_storage_and_restarts_when_known() -> None:
+    from typing import cast
+
+    from sideboard.core.contracts import PresentInput, ViewContext, ViewMode
+    from sideboard.features.docker_local.models import DockerPayload
+    from sideboard.features.docker_local.provider import demo_payload
+
+    payload = cast(DockerPayload, demo_payload())
+    churning = payload.model_copy(
+        update={
+            "containers": tuple(
+                container.model_copy(update={"restarts_since_sample": 3})
+                if container.name == "sideboard-db-1"
+                else container
+                for container in payload.containers
+            )
+        }
+    )
+    view = present_summary(
+        PresentInput(
+            settings=summary_settings(),
+            inputs={"primary": envelope_for(churning)},
+            context=view_context(),
+        )
+    )
+    restarts = view.metric("restarts")
+    disk = view.metric("disk")
+    reclaimable = view.metric("reclaimable")
+    assert restarts is not None and restarts.value_text == "3"
+    assert disk is not None and "system df" in disk.basis
+    assert disk.value_text == "3.5 GiB"
+    assert reclaimable is not None and reclaimable.value_text == "1.0 GiB"
+
+    # Without a previous sample there is no delta: the card leaves the line out rather
+    # than printing a metric that says it cannot answer.
+    fresh = present_summary(
+        PresentInput(
+            settings=summary_settings(),
+            inputs={"primary": envelope_for(demo_payload())},
+            context=view_context(),
+        )
+    )
+    assert fresh.metric("restarts") is None
+    detailed = present_summary(
+        PresentInput(
+            settings=summary_settings(),
+            inputs={"primary": envelope_for(demo_payload())},
+            context=ViewContext(
+                now=datetime(2026, 10, 13, 12, 0, tzinfo=UTC), mode=ViewMode.DETAIL
+            ),
+        )
+    )
+    assert detailed.metric("restarts") is not None
+    assert detailed.metric("storage_Images") is not None
+
+
+def test_a_failed_cli_call_names_the_command_and_quotes_stderr() -> None:
+    """ "docker CLI failed with exit code 1" is not a diagnosis."""
+    error = classify_cli_failure(
+        "Error response from daemon: No such container: abc\n", 1, command="container inspect"
+    )
+    assert "container inspect" in error.message
+    assert "No such container" in error.message
+    assert classify_cli_failure("permission denied", 1).detail.get("state") == "access_denied"

@@ -116,7 +116,7 @@ class DockerProvider:
             env=docker_env(),
         )
         if not result.ok:
-            raise classify_cli_failure(result.stderr, result.returncode)
+            raise classify_cli_failure(result.stderr, result.returncode, command=" ".join(args[:2]))
         if result.truncated:
             raise UnavailableError("docker output exceeded the configured cap", state="truncated")
         return result.stdout

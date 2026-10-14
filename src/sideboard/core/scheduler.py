@@ -58,6 +58,7 @@ from .errors import (
     RateLimitedError,
     SideboardError,
     SourceErrorInfo,
+    StorageError,
     TransientNetworkError,
     UnauthorizedError,
     UnavailableError,
@@ -778,7 +779,7 @@ class Scheduler:
                 updated_at=self.clock.now().isoformat(),
                 retention_seconds=runtime.instance.retention_seconds,
             )
-        except ValueError, sqlite3.ProgrammingError:
+        except ValueError, sqlite3.ProgrammingError, StorageError:
             # Shutdown closed the database under an in-flight write. The data was
             # collected and shown; there is nothing to report and nothing to retry.
             log.debug("database closed while persisting %s", runtime.source_id)
