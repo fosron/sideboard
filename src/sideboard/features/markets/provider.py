@@ -107,6 +107,7 @@ class YahooProvider:
                     as_of=record.as_of,
                     fetched_at=context.clock.now(),
                     source="yfinance",
+                    venue_note=settings.symbol_venues.get(instrument_id),
                 )
             )
         if not records:

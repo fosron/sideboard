@@ -178,9 +178,11 @@ class PricesProvider:
                 observed=len(quotes),
                 missing=missing,
                 notes=(
-                    "manual and statement quotes; a missing quote is not zero"
+                    "manual and statement quotes only; an instrument without one may still "
+                    "be priced by the optional market source, and a missing price is not zero"
                     if quotes
-                    else "no quotes stored yet"
+                    else "no manual or statement quote stored yet; the optional market "
+                    "source may cover some instruments"
                 ),
             ),
         )

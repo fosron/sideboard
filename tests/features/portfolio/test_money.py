@@ -460,3 +460,108 @@ async def test_unpriced_instruments_are_reported(tmp_path: Path) -> None:
         assert "DEMO-EQUITY" not in missing
     finally:
         await database.aclose()
+
+
+def test_proxy_price_and_shared_isin_are_stated_not_implied() -> None:
+    """One fund held on two venues is two positions with one ISIN.
+
+    The rows stay separate, but two things must be visible rather than implied: that a
+    price came from another listing of the same instrument, and what the combined
+    exposure is — otherwise each row's share looks half as large as the real position.
+    """
+    from sideboard.features.portfolio.presenter import shared_instrument_footnote
+
+    positions = (
+        Position(
+            account="IBKR",
+            instrument_id="VALL.MI",
+            quantity=Decimal("450"),
+            currency="EUR",
+            isin="IE000VAHT5T0",
+            venue="BVME.ETF",
+        ),
+        Position(
+            account="Revolut",
+            instrument_id="VGLA.DE",
+            quantity=Decimal("270.54447074"),
+            currency="EUR",
+            isin="IE000VAHT5T0",
+            venue="XETRA",
+        ),
+        Position(
+            account="Swedbank",
+            instrument_id="VRC.WA",
+            quantity=Decimal("7000"),
+            currency="PLN",
+            isin="PLVRCM000016",
+            venue="WSE",
+        ),
+    )
+    quotes = {
+        "VALL.MI": Quote(
+            instrument_id="VALL.MI",
+            currency="EUR",
+            price=Decimal("4.457"),
+            as_of=date(2026, 10, 14),
+            source="yfinance",
+            quote_type="market",
+            venue_note="Stuttgart, same ISIN",
+        ),
+        "VGLA.DE": Quote(
+            instrument_id="VGLA.DE",
+            currency="EUR",
+            price=Decimal("4.457"),
+            as_of=date(2026, 10, 14),
+            source="yfinance",
+            quote_type="market",
+        ),
+        "VRC.WA": Quote(
+            instrument_id="VRC.WA",
+            currency="PLN",
+            price=Decimal("127.00"),
+            as_of=date(2026, 10, 14),
+            source="yfinance",
+            quote_type="market",
+        ),
+    }
+    fx = {
+        ("PLN", "EUR"): FxRate(
+            base="PLN", quote="EUR", rate=Decimal("0.22848"), as_of=date(2026, 10, 14)
+        )
+    }
+    valuation = value_portfolio(positions, quotes, fx)
+
+    # Every position is priced, and the proxy is labelled on the holding itself.
+    assert valuation.complete is True
+    proxies = [h for h in valuation.holdings if "Stuttgart" in h.price_basis]
+    assert len(proxies) == 1 and proxies[0].instrument_id == "VALL.MI"
+    assert any("same ISIN, different venue" in note for note in valuation.notes)
+
+    # The combined exposure of the repeated ISIN is stated explicitly.
+    footnote = shared_instrument_footnote(valuation)
+    assert footnote is not None
+    assert "IE000VAHT5T0" in footnote
+    assert "VALL.MI" in footnote and "VGLA.DE" in footnote
+    assert "combined share" in footnote
+    combined = valuation.shares["VALL.MI"] + valuation.shares["VGLA.DE"]
+    assert f"{combined.quantize(Decimal('0.1'))}%" in footnote
+
+
+def test_vercom_dominates_the_tracked_total_and_says_so() -> None:
+    """A concentration warning is the point of the metric, not a rounding detail."""
+    from decimal import Decimal as D
+
+    positions = (
+        Position(
+            account="IBKR", instrument_id="VGLA.DE", quantity=D("270.54447074"), currency="EUR"
+        ),
+        Position(account="Swedbank", instrument_id="VRC.WA", quantity=D("7000"), currency="PLN"),
+    )
+    quotes = {
+        "VGLA.DE": Quote(instrument_id="VGLA.DE", currency="EUR", price=D("4.457")),
+        "VRC.WA": Quote(instrument_id="VRC.WA", currency="PLN", price=D("127.00")),
+    }
+    fx = {("PLN", "EUR"): FxRate(base="PLN", quote="EUR", rate=D("0.22848"))}
+    valuation = value_portfolio(positions, quotes, fx)
+    vercom = valuation.shares["VRC.WA"]
+    assert vercom > D("98"), f"Vercom should dominate the tracked total, got {vercom}"

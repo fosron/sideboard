@@ -75,6 +75,9 @@ class Quote:
     fetched_at: datetime | None = None
     source: str = SOURCE_MANUAL
     quote_type: str = SOURCE_MANUAL
+    # Set when the price comes from a different listing of the same instrument, so the
+    # holding can say "market quote (Stuttgart proxy)" instead of looking native.
+    venue_note: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,6 +108,7 @@ class HoldingValue:
     daily_change_native: Decimal | None = None
     cost_basis_total: Decimal | None = None
     cost_basis_currency: str | None = None
+    isin: str | None = None
 
     @property
     def priced(self) -> bool:
@@ -209,6 +213,7 @@ def value_portfolio(
             instrument_name=position.name,
             cost_basis_total=position.cost_basis_total,
             cost_basis_currency=position.cost_basis_currency,
+            isin=position.isin,
         )
         if reported_entry is not None:
             value, currency, as_of = reported_entry
@@ -234,10 +239,17 @@ def value_portfolio(
         _ = quote_currency_note
 
         native = native_value(position.quantity, quote.price, quote.price_unit_multiplier)
+        basis = f"{quote.quote_type} quote"
+        if quote.venue_note:
+            basis = f"{basis} ({quote.venue_note})"
+            notes.append(
+                f"{position.instrument_id}: priced from {quote.venue_note}; "
+                "same ISIN, different venue"
+            )
         entry = _with_price(
             entry,
             price=quote.price,
-            basis=f"{quote.quote_type} quote",
+            basis=basis,
             as_of=quote.as_of,
             native=native,
             multiplier=quote.price_unit_multiplier,

@@ -21,6 +21,9 @@ class MarketsSettings(BaseModel):
     instruments: list[str] = Field(default_factory=list)
     symbol_map: dict[str, str] = Field(default_factory=dict)
     symbol_currencies: dict[str, str] = Field(default_factory=dict)
+    # instrument_id -> short venue note, for a price taken from another listing of the
+    # same instrument. It is shown with the value; nothing is substituted silently.
+    symbol_venues: dict[str, str] = Field(default_factory=dict)
     currency: str = "EUR"
     refresh_seconds: float = 3600.0
     active_seconds: float | None = None
@@ -42,6 +45,7 @@ class MarketQuoteRecord(BaseModel):
     as_of: date | None = None
     fetched_at: datetime | None = None
     source: str = "yfinance"
+    venue_note: str | None = None
 
 
 class MarketsPayload(SourcePayload):

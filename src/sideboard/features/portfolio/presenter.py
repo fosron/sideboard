@@ -127,6 +127,7 @@ def _market_quotes(envelope_payload: object) -> dict[str, Quote]:
             fetched_at=getattr(record, "fetched_at", None),
             source=str(getattr(record, "source", "market")),
             quote_type="market",
+            venue_note=getattr(record, "venue_note", None),
         )
     return quotes
 
@@ -203,7 +204,15 @@ def valuation_from_inputs(
                 closes[key] = parsed
 
     if isinstance(holdings_payload, HoldingsPayload) and holdings_payload.unpriced_instruments:
-        notes.append("no stored quote for: " + ", ".join(holdings_payload.unpriced_instruments))
+        # `unpriced_instruments` lists what has no *stored* (manual/statement) quote. An
+        # instrument priced by a market quote is not unpriced, so only report the ones
+        # with no price from any source.
+        covered = set(stored) | set(market)
+        without_any_price = [i for i in holdings_payload.unpriced_instruments if i not in covered]
+        if without_any_price:
+            notes.append(
+                "no price at all (manual, statement or market) for: " + ", ".join(without_any_price)
+            )
     valuation = value_portfolio(
         positions,
         quotes,
@@ -330,6 +339,9 @@ def present_summary(inputs: PresentInput) -> ViewModel:
     footnote_parts = [
         "price change is not investment return; deposits and withdrawals also change value"
     ]
+    shared = shared_instrument_footnote(valuation)
+    if shared:
+        footnote_parts.append(shared)
     if conflicts:
         footnote_parts.append("price conflicts: " + "; ".join(conflicts[:2]))
     if notes:
@@ -716,3 +728,33 @@ def _status(inputs: PresentInput) -> StatusView | None:
             Severity.ERROR: 4,
         }.get(status.severity, 2),
     )
+
+
+def shared_instrument_footnote(valuation: Valuation) -> str | None:
+    """Flag one instrument held as several positions.
+
+    A fund bought on two exchanges is two positions with one ISIN. Each row's "share"
+    then looks half as large as the real exposure, which would misstate concentration.
+    The rows stay separate — different accounts and venues — and the combined figure is
+    stated instead of being implied.
+    """
+    by_isin: dict[str, list[str]] = {}
+    for holding in valuation.holdings:
+        if holding.isin:
+            by_isin.setdefault(holding.isin, []).append(holding.instrument_id)
+    repeated = {isin: ids for isin, ids in by_isin.items() if len(ids) > 1}
+    if not repeated:
+        return None
+    parts: list[str] = []
+    for isin, ids in sorted(repeated.items()):
+        # sum() would start from int 0 and widen the result type; the start value keeps
+        # the arithmetic in Decimal all the way through.
+        combined = sum(
+            ((valuation.shares.get(instrument_id) or Decimal("0")) for instrument_id in ids),
+            Decimal("0"),
+        )
+        parts.append(
+            f"{isin} held as {len(ids)} positions ({', '.join(sorted(ids))}): "
+            f"combined share {_pct(combined)}"
+        )
+    return " · ".join(parts)
