@@ -107,7 +107,8 @@ reference on screen. The tabs are the first row, so the cards get the rest of th
 | Input | Action |
 |---|---|
 | `1`–`9` | select the first nine visible tabs, in configured order |
-| `Ctrl+P` | palette: any tab, any widget, and the application actions |
+| `t` / `Ctrl+T` | next colour palette / pick one (session only; the config is untouched) |
+| `Ctrl+P` | palette: any tab, any widget, any palette, and the application actions |
 | `Ctrl+R` | validate and reload configuration; an invalid update keeps the running one |
 | `Tab` / `Shift+Tab` | next / previous card of the visible tab, wrapping |
 | `←` / `→` (`h` / `l`) | move to the card on the left / right, wrapping at the ends |
@@ -193,6 +194,11 @@ theme = "catppuccin-mocha"
 
 `uv run sideboard themes list` prints the same list, and `uv run sideboard themes show
 <name>` prints every colour of one palette.
+
+**Switching in the app is session-only.** `t` moves to the next palette, `Ctrl+T` opens a
+picker, and `Ctrl+P` lists them as commands. None of these writes the configuration — the
+file stays exactly as you wrote it — so trying palettes cannot change your default. A
+reload (`Ctrl+R`) returns to the configured palette.
 
 Any single colour can be adjusted without leaving the palette — the token names are the
 palette's own field names (`background`, `surface`, `panel`, `boost`, `foreground`,

@@ -56,7 +56,7 @@ from .features import build_feature_registry
 from .ui.card import CardShell, freshness_line
 from .ui.navigation import Box, neighbour
 from .ui.overview import LayoutMode, OverviewPane, SlotSpec, layout_mode, slot_specs
-from .ui.palettes import canonical_name, resolve_palette
+from .ui.palettes import PALETTES, canonical_name, palette_names, resolve_palette
 from .ui.rotation import Candidate, HoldReason, RotationController
 from .ui.screens import (
     CommandPaletteScreen,
@@ -64,6 +64,7 @@ from .ui.screens import (
     HelpScreen,
     MouseDiagnosticScreen,
     PaletteCommand,
+    ThemePickerScreen,
 )
 from .ui.shell import DetailPane, FilterBar
 from .ui.theme import build_rich_theme, build_theme
@@ -238,6 +239,9 @@ class SideboardApp(App[None]):
         self._tab_signature: tuple[str, ...] = ()
         self._pending_slot_repaints: set[str] = set()
         self._rich_theme_pushed = False
+        #: The palette in force right now. A session switch sets this; a reload resets it
+        #: to the configured value, which stays the single source of truth on disk.
+        self._session_theme: str | None = None
         self._slot_repaint_timer: Any = None
 
     # ------------------------------------------------------------------ bindings
@@ -252,6 +256,8 @@ class SideboardApp(App[None]):
         Binding("s", "save_item", "save"),
         Binding("r", "refresh_source", "refresh"),
         Binding("v", "toggle_privacy", "privacy"),
+        Binding("t", "next_theme", "next palette"),
+        Binding("ctrl+t", "theme_picker", "palette"),
         Binding("question_mark", "help", "help"),
         Binding("ctrl+y", "reset_holds", "reset holds"),
         Binding("q", "quit", "quit"),
@@ -1229,6 +1235,7 @@ class SideboardApp(App[None]):
         driver starts, so a Rich theme pushed that early is gone by the first render.
         """
         key = canonical_name(app_settings.theme)
+        self._session_theme = key
         palette = resolve_palette(key, app_settings.theme_colors)
         theme = build_theme(palette, key=key)
         self.register_theme(theme)
@@ -1244,6 +1251,47 @@ class SideboardApp(App[None]):
     def on_load(self) -> None:
         """Push the Rich half of the palette once the driver's console exists."""
         self._apply_palette(self.runtime.config.app, push_rich=True)
+
+    def _set_theme(self, key: str) -> None:
+        """Switch palette for this session. Never writes the configuration.
+
+        Both halves are rebuilt (Textual CSS variables and the Rich theme on the console),
+        then the screen is repainted: the renderers hold style *names*, so a repaint is
+        enough to recolour every card.
+        """
+        try:
+            palette = resolve_palette(key)
+        except ValueError as error:
+            self.notify(str(error), severity="error", timeout=8)
+            return
+        self._session_theme = canonical_name(key)
+        theme = build_theme(palette, key=self._session_theme)
+        self.register_theme(theme)
+        self.theme = theme.name
+        if self._rich_theme_pushed:
+            with contextlib.suppress(Exception):
+                self.console.pop_theme()
+        self.console.push_theme(build_rich_theme(palette))
+        self._rich_theme_pushed = True
+        self.refresh_css(animate=False)
+        self._present_everything()
+        self.notify(f"{palette.label} — session only; set app.theme to keep it")
+
+    def action_next_theme(self) -> None:
+        """t: the next palette in the list, wrapping."""
+        names = palette_names()
+        current = self._session_theme or canonical_name(self.runtime.config.app.theme)
+        index = names.index(current) if current in names else -1
+        self._set_theme(names[(index + 1) % len(names)])
+
+    def action_theme_picker(self) -> None:
+        """Ctrl+T: pick from the list, with the current one marked."""
+        current = self._session_theme or canonical_name(self.runtime.config.app.theme)
+        self._apply_global_hold(HoldReason.MODAL, True)
+        self.push_screen(
+            ThemePickerScreen([(key, PALETTES[key].label) for key in palette_names()], current),
+            callback=self._after_modal,
+        )
 
     def _terminal_name(self) -> str:
         import os
@@ -1279,6 +1327,8 @@ class SideboardApp(App[None]):
             commands.append((f"widget:{widget_id}", f"Show details: {label}"))
         commands.extend(
             [
+                ("action:theme_picker", "Colour palette: choose"),
+                ("action:next_theme", "Colour palette: next"),
                 ("action:pause", "Toggle global visual pause"),
                 ("action:reload", "Reload configuration"),
                 ("action:reset_holds", "Release all holds"),
@@ -1299,6 +1349,9 @@ class SideboardApp(App[None]):
         if kind == "widget":
             self._show_widget(value)
             return
+        if kind == "theme":
+            self._set_theme(value)
+            return
         actions = {
             "pause": self.action_toggle_pause,
             "reload": self.action_reload_config,
@@ -1306,6 +1359,8 @@ class SideboardApp(App[None]):
             "refresh": self.action_refresh_source,
             "privacy": self.action_toggle_privacy,
             "mouse": self.action_mouse_diagnostic,
+            "theme_picker": self.action_theme_picker,
+            "next_theme": self.action_next_theme,
             "help": self.action_help,
             "quit": self.action_quit,
         }

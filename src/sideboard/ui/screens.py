@@ -29,6 +29,7 @@ __all__ = [
     "DetailScreen",
     "HelpScreen",
     "MouseDiagnosticScreen",
+    "ThemePickerScreen",
 ]
 
 
@@ -214,6 +215,7 @@ class HelpScreen(ModalScreen[None]):
         ("r", "request a rate-limited refresh of the selected provider"),
         ("v", "privacy mode: hide amounts and private identifiers"),
         ("Ctrl+Y", "release every hold"),
+        ("t / Ctrl+T", "next colour palette / pick one (session only)"),
         ("Ctrl+P", "command palette: any tab, any widget, any action"),
         ("Ctrl+R", "validate and reload configuration"),
         ("?", "this help"),
@@ -294,6 +296,54 @@ class CommandPaletteScreen(ModalScreen[None]):
         self.dismiss()
         if command_id:
             self.app.post_message(PaletteCommand(command_id))  # type: ignore[attr-defined]
+
+    def action_dismiss_screen(self) -> None:
+        self.dismiss()
+
+
+class ThemePickerScreen(ModalScreen[None]):
+    """Ctrl+T: pick a palette for this session.
+
+    Session-only on purpose: the configuration keeps the default, so trying a palette
+    cannot silently rewrite the file the user maintains by hand.
+    """
+
+    BINDINGS = [Binding("escape", "dismiss_screen", "close")]
+
+    def __init__(self, palettes: Sequence[tuple[str, str]], current: str) -> None:
+        super().__init__()
+        self._palettes = tuple(palettes)
+        self._current = current
+
+    def compose(self) -> object:
+        wrapper = VerticalScroll(id="sb-help")
+        wrapper.border_title = "Colour palette"
+        yield wrapper
+
+    def on_mount(self) -> None:
+        options = OptionList(id="sb-palette-list")
+        self.query_one("#sb-help", VerticalScroll).mount(options)
+        for key, label in self._palettes:
+            marker = "● " if key == self._current else "  "
+            options.add_option(Option(single_line(f"{marker}{label}", 48), id=key))
+        self.query_one("#sb-help", VerticalScroll).mount(
+            Static(
+                Text(
+                    "This lasts until Sideboard restarts and never writes the "
+                    "configuration.\nSet app.theme in the configuration to keep a "
+                    "palette.\n",
+                    style=DIM,
+                ),
+                id="sb-theme-note",
+            )
+        )
+        options.focus()
+
+    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        key = str(event.option.id or "")
+        self.dismiss()
+        if key:
+            self.app.post_message(PaletteCommand(f"theme:{key}"))  # type: ignore[attr-defined]
 
     def action_dismiss_screen(self) -> None:
         self.dismiss()

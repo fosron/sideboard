@@ -124,9 +124,7 @@ def test_the_request_is_one_rest_page_per_repository() -> None:
     A `workflowRuns` selection fails with "Field 'workflowRuns' doesn't exist on type
     'Repository'" — which is how this was found, on the live API.
     """
-    assert (
-        runs_path(REPOS[0], 12) == "/repos/example-org/demo-app/actions/runs?per_page=12"
-    )
+    assert runs_path(REPOS[0], 12) == "/repos/example-org/demo-app/actions/runs?per_page=12"
 
 
 def test_running_and_failed_are_derived_from_status_and_conclusion() -> None:

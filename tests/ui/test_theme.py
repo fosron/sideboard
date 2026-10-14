@@ -216,3 +216,80 @@ async def test_a_palette_change_on_reload_recolours_without_a_restart(tmp_path: 
         assert gruvbox is not None and gruvbox.color is not None
         assert gruvbox.color.get_truecolor().hex.lower() == PALETTES["gruvbox"].dim
     await app.runtime.database.aclose()
+
+
+async def test_t_cycles_palettes_for_the_session_only(tmp_path: Path) -> None:
+    """Switching in the app must not rewrite the configuration.
+
+    The palette is a session choice until the user decides otherwise, so the file they
+    maintain by hand stays exactly as they wrote it.
+    """
+    app = await make_app(tmp_path, theme="sideboard")
+    config_file = app.runtime.paths.config_file
+    before = config_file.read_text(encoding="utf-8") if config_file.exists() else ""
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        first = app.theme
+        await pilot.press("t")
+        await pilot.pause()
+        second = app.theme
+        assert second != first, "t must switch palette"
+        assert app._session_theme == second
+        style = app.console.get_style("sb-dim", default=None)
+        assert style is not None and style.color is not None
+        assert style.color.get_truecolor().hex.lower() == PALETTES[second].dim
+
+        # Wrapping: one full cycle of presses returns to where it started.
+        from sideboard.ui.palettes import palette_names
+
+        for _ in range(len(palette_names()) - 1):
+            await pilot.press("t")
+            await pilot.pause()
+        assert app._session_theme == "sideboard", "the cycle wraps around the list"
+
+        after = config_file.read_text(encoding="utf-8") if config_file.exists() else ""
+        assert after == before, "a session switch must not touch the configuration file"
+    await app.runtime.database.aclose()
+
+
+async def test_ctrl_t_opens_a_picker_that_applies_a_palette(tmp_path: Path) -> None:
+    from textual.widgets import OptionList
+
+    from sideboard.ui.screens import ThemePickerScreen
+
+    app = await make_app(tmp_path, theme="sideboard")
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("ctrl+t")
+        await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, ThemePickerScreen)
+        options = screen.query_one(OptionList)
+        assert options.option_count == len(PALETTES)
+        # Choose "dracula" the way the widget would.
+        index = [str(option.id) for option in options.options].index("dracula")
+        options.highlighted = index
+        options.action_select()
+        await pilot.pause()
+        assert app.theme == "dracula"
+        assert app._session_theme == "dracula"
+        style = app.console.get_style("sb-value", default=None)
+        assert style is not None and style.color is not None
+        assert style.color.get_truecolor().hex.lower() == PALETTES["dracula"].value
+    await app.runtime.database.aclose()
+
+
+async def test_the_command_palette_can_switch_palettes_too(tmp_path: Path) -> None:
+    app = await make_app(tmp_path, theme="sideboard")
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        commands = dict(app._palette_commands())
+        assert "action:theme_picker" in commands and "action:next_theme" in commands
+        app._run_command("theme:gruvbox")
+        await pilot.pause()
+        assert app.theme == "gruvbox"
+        # An unknown palette is reported, not applied.
+        app._run_command("theme:no-such-palette")
+        await pilot.pause()
+        assert app.theme == "gruvbox"
+    await app.runtime.database.aclose()
