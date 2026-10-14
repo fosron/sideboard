@@ -138,12 +138,14 @@ def test_limit_is_applied() -> None:
 
 
 def test_footnote_states_recent_viewing_frequency() -> None:
+    """The ranking basis is an explanation: the card is a list, the detail view says how."""
     payload = _payload(
         [_upload("vid-alpha-1", score=2.0, events=2)],
         basis=RANK_BASIS_RECENT_VIEWING,
     )
-    view = _present(payload=payload)
-    assert view.footnote == FREQUENCY_FOOTNOTE
+    assert _present(payload=payload).footnote is None
+    detail = _present(payload=payload, mode=ViewMode.DETAIL)
+    assert detail.footnote == FREQUENCY_FOOTNOTE
 
 
 def test_footnote_mentions_import_date_when_present() -> None:
@@ -152,16 +154,16 @@ def test_footnote_mentions_import_date_when_present() -> None:
         basis=RANK_BASIS_RECENT_VIEWING,
         imported_at=datetime(2026, 10, 12, 8, 0, tzinfo=UTC),
     )
-    view = _present(payload=payload)
-    assert view.footnote is not None
-    assert view.footnote.startswith(FREQUENCY_FOOTNOTE)
-    assert "imported 2026-10-12" in view.footnote
+    footnote = _present(payload=payload, mode=ViewMode.DETAIL).footnote
+    assert footnote is not None
+    assert footnote.startswith(FREQUENCY_FOOTNOTE)
+    assert "imported 2026-10-12" in footnote
 
 
 def test_footnote_states_favorites_only_ordering() -> None:
     payload = _payload([_upload("vid-alpha-1")])
-    view = _present(payload=payload)
-    assert view.footnote == FAVORITES_FOOTNOTE
+    assert _present(payload=payload).footnote is None
+    assert _present(payload=payload, mode=ViewMode.DETAIL).footnote == FAVORITES_FOOTNOTE
 
 
 def test_no_channels_configured_is_an_honest_status() -> None:

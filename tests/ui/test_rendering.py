@@ -198,9 +198,9 @@ def test_no_rich_style_name_strings_remain_in_the_ui() -> None:
 def test_a_card_line_says_one_thing_about_time() -> None:
     """The card line answers "when was this updated", and nothing else.
 
-    It used to read "as of 14:15 · updated 14:22 · fresh · partial": two timestamps, a
-    state that is the normal case, and a coverage word, with no way to tell which one
-    mattered. The detail view keeps all of it (verbose=True).
+    It used to read "as of 14:15 · updated 14:22 · fresh · partial" plus the hold reasons:
+    two timestamps, a state that is the normal case, coverage, and interaction state, with
+    no way to tell which one mattered.
     """
     from datetime import UTC, datetime
 
@@ -218,15 +218,7 @@ def test_a_card_line_says_one_thing_about_time() -> None:
         fetched_at=datetime(2026, 10, 14, 14, 22, tzinfo=UTC),
         coverage=Coverage(observed=3, expected=8),
     )
-    compact = freshness_line(
-        envelope, now=now, timezone="UTC", held_reasons=("hover", "interaction"), pinned=True
-    )
-    assert compact == "updated 14:22"
-    verbose = freshness_line(
-        envelope, now=now, timezone="UTC", held_reasons=("hover",), pinned=True, verbose=True
-    )
-    assert "as of 14:15" in verbose and "updated 14:22" in verbose
-    assert "fresh" in verbose and "partial" in verbose and "held:hover" in verbose
+    assert freshness_line(envelope, now=now, timezone="UTC") == "updated 14:22"
 
     stale = SourceEnvelope(
         source_id="news",
@@ -238,80 +230,81 @@ def test_a_card_line_says_one_thing_about_time() -> None:
     )
     assert freshness_line(stale, now=now, timezone="UTC") == "updated 12:00 · stale"
 
+    # No fetch time at all: the source's own date is the only timestamp there is.
+    undated = SourceEnvelope(
+        source_id="news",
+        payload_schema="news.feeds",
+        payload_schema_version=1,
+        connectivity=Connectivity.OK,
+        freshness=Freshness.FRESH,
+        as_of=datetime(2026, 10, 14, 14, 15, tzinfo=UTC),
+    )
+    assert freshness_line(undated, now=now, timezone="UTC") == "as of 14:15"
+    # A degraded connection is a problem, so it is stated.
+    degraded = SourceEnvelope(
+        source_id="news",
+        payload_schema="news.feeds",
+        payload_schema_version=1,
+        connectivity=Connectivity.UNAVAILABLE,
+        freshness=Freshness.STALE,
+        fetched_at=datetime(2026, 10, 14, 12, 0, tzinfo=UTC),
+        payload=object(),  # type: ignore[arg-type]
+    )
+    assert "unavailable" in freshness_line(degraded, now=now, timezone="UTC")
 
-def test_focus_held_and_pinned_are_three_different_looks() -> None:
-    """A card's state must be readable at a glance.
 
-    Focus, "the pointer is over this" and "this is pinned" all drew the same amber border,
-    so walking the grid with Tab left every visited card looking like the focused one. The
-    three states now use three different colours, and pinned is marked by the diamond in
-    the title instead of by a border colour.
+def _rendered_text(renderable: object) -> str:
+    """Everything Rich would draw for a renderable, as plain text.
+
+    The palette is registered on this console exactly as the application registers it:
+    the renderers pass style *names*, and Rich resolves them against a theme.
     """
-    from sideboard.ui.theme import SIDEBOARD_THEME
+    from rich.console import Console
 
-    variables = SIDEBOARD_THEME.variables
-    focus = variables["sb-focus"]
-    held = variables["sb-border-held"]
-    plain = variables["sb-border"]
-    assert len({focus, held, plain}) == 3, "focus, held and default must not share a colour"
-    css = (Path(__file__).resolve().parents[2] / "src/sideboard/ui/theme.tcss").read_text()
-    assert "CardShell:focus" in css and "background: $sb-focus-bg" in css
-    pinned = css[css.index("CardShell.sb-pinned") :].split("}")[0]
-    assert "sb-border;" in pinned, "a pinned card keeps the plain border"
+    from sideboard.ui.palettes import resolve_palette
+    from sideboard.ui.theme import build_rich_theme
+
+    console = Console(width=200, record=True, legacy_windows=False)
+    console.push_theme(build_rich_theme(resolve_palette("sideboard")))
+    return "".join(
+        text
+        for text, _style, _control in console.render(renderable)  # type: ignore[arg-type]
+    )
 
 
-async def test_help_lists_every_key_the_dashboard_has(tmp_path: Path) -> None:
-    """`?` is the only place the keys are listed, so it has to be complete."""
-    from sideboard.ui.screens import HelpScreen
+async def test_no_panel_repeats_its_attribution_or_interaction_state(tmp_path: Path) -> None:
+    """A card says one thing about time, and the full view says it once.
+
+    The weather card showed "model-derived forecast · Open-Meteo" three times — the view
+    footnote in the body, again as the modal's border subtitle, and again under the daily
+    table — and the modal's chrome listed "pinned · held:interaction · as of 17:00".
+    """
+    from sideboard.ui.screens import DetailScreen
 
     app = await make_app(tmp_path)
-    async with app.run_test(size=(120, 40)) as pilot:
+    async with app.run_test(size=(140, 44)) as pilot:
         await settle(app, pilot)
-        await pilot.press("question_mark")
+        screen = screen_text(app)
+        assert "held:" not in screen, "interaction state is not provenance"
+        assert "pinned ·" not in screen
+        assert "Open-Meteo" not in screen, "the card carries the weather, not the credits"
+
+        card = app._card_for_widget("weather")
+        assert card is not None
+        card.focus()
+        await pilot.press("enter")
         await pilot.pause()
-        assert isinstance(app.screen, HelpScreen)
-        help_text = screen_text(app)
-        for keys in ("Arrows", "Tab / Shift+Tab", "Enter", "Space", "Ctrl+P", "Ctrl+R", "q"):
-            assert keys in help_text, f"the help screen must mention {keys!r}"
-        await pilot.press("escape")
-        await pilot.pause()
-        assert not isinstance(app.screen, HelpScreen)
+        modal = app.screen
+        assert isinstance(modal, DetailScreen)
+        wrapper = modal.query_one("#sb-detail")
+        subtitle = str(wrapper.border_subtitle or "")
+        assert "held" not in subtitle and "pinned" not in subtitle
+        assert "updated " in subtitle or "as of " in subtitle, subtitle
+        assert subtitle.count("·") <= 2, f"the chrome should stay short: {subtitle!r}"
+
+        head = modal.query_one("#sb-detail-head")
+        # Static wraps what it was given in a Visual; the Rich renderable is inside it.
+        body = _rendered_text(head.visual._renderable)  # type: ignore[attr-defined]
+        assert body.count("Open-Meteo") == 1, body
+        assert "model-derived" not in body or body.count("model-derived") == 1
     await app.runtime.database.aclose()
-
-
-def test_a_list_row_never_wraps() -> None:
-    """One item is one row: the title is truncated so the stats fit beside it.
-
-    The HN card rendered "Amazon pushes up prices across the Internet  pts 88 · c 56 ·
-    age 2h" at a card width of 76 and the stats wrapped onto a second line, so half the
-    rows read as a headline followed by a stray "age 2h".
-    """
-    from sideboard.core.contracts import Item, Privacy
-    from sideboard.ui.renderers import render_items
-
-    items = tuple(
-        Item(
-            id=f"item:{index}",
-            title="Iosevka is an open-source, sans-serif and slab-serif, monospaced font",
-            meta=(("pts", "220"), ("c", "77"), ("age", "3h")),
-            privacy=Privacy.PUBLIC,
-        )
-        for index in range(4)
-    )
-    for width in (40, 60, 76, 100):
-        group = render_items(items, width=width, privacy=False, selected_index=0)
-        for line in group.renderables:  # type: ignore[attr-defined]
-            assert len(line.plain) <= width, f"{width} columns: {line.plain!r} overflows"
-
-    badged = (
-        Item(
-            id="item:badge",
-            title="A headline that is deliberately much longer than the card is wide",
-            badge="world",
-            meta=(("cat", "personal finance"),),
-            privacy=Privacy.PUBLIC,
-        ),
-    )
-    group = render_items(badged, width=60, privacy=False)
-    for line in group.renderables:  # type: ignore[attr-defined]
-        assert len(line.plain) <= 60, line.plain

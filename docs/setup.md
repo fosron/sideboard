@@ -135,6 +135,14 @@ reference on screen. The tabs are the first row, so the cards get the rest of th
 * **Keyboard navigation holds the focused card for 15 seconds** (configurable).
   Programmatic initial focus does not start a hold.
 * **A detail modal pauses all visible rotation** until it is closed.
+* **Chrome says one thing.** A card's border shows one timestamp — `updated 17:05`, or
+  `stale`/`expired` when that is the honest answer — and nothing else: interaction state
+  ("held", "pinned") is visible from the border itself, and coverage ("partial") is stated
+  next to the numbers it qualifies. The full view repeats the same line in the same place,
+  so a card and its detail can never disagree about when the data arrived.
+* **Attribution appears once.** Open-Meteo is credited in the weather view's footnote, not
+  again under the daily table, and not on the card at all. Explanations that a card does
+  not need (ranking basis, price-return caveats, coverage notes) live in the full view.
 * **A modal closes when you click outside it.** The detail, help, palette and theme
   pickers are centred with a margin all round; clicking that margin dismisses them, and a
   click inside does not (clicks bubble from children, so the test is against the content

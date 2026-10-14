@@ -149,7 +149,9 @@ def test_detail_lists_hours_and_the_daily_table(sample_payload, make_envelope) -
     assert view.table.rows[0].cells["rain"] == "1.2"
     assert view.table.rows[0].cells["chance"] == "40%"
     assert view.table.truncated is False
-    assert "Open-Meteo" in (view.table.footnote or "")
+    assert "daily forecast" in (view.table.footnote or "")
+    # Attribution appears once, in the view footnote, not again under the table.
+    assert "Open-Meteo" not in (view.table.footnote or "")
     assert all(metric.privacy is Privacy.PUBLIC for metric in view.metrics)
 
 

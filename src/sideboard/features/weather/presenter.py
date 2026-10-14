@@ -331,7 +331,7 @@ def _daily_table(payload: WeatherPayload, settings: WeatherWidgetSettings) -> Ta
         columns=tuple(columns),
         rows=tuple(rows),
         truncated=len(payload.daily) > settings_days,
-        footnote=f"{_BASIS_DAILY} · Open-Meteo",
+        footnote=_BASIS_DAILY,
     )
 
 

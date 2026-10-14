@@ -78,7 +78,11 @@ def present(data: PresentInput) -> ViewModel:
         )
     return ViewModel(
         items=items,
-        footnote=_ranking_footnote(payload),
+        # How the list is ordered is an explanation, not a problem: the card carries the
+        # list, the detail view carries the ranking basis. An empty or problem view above
+        # keeps it, because there the basis is what the reader needs to understand the
+        # state.
+        footnote=_ranking_footnote(payload) if data.context.mode is ViewMode.DETAIL else None,
     )
 
 

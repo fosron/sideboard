@@ -34,25 +34,19 @@ def freshness_line(
     *,
     now: datetime,
     timezone: str,
-    held_reasons: tuple[str, ...] = (),
     demo: bool = False,
     offline: bool = False,
-    pinned: bool = False,
-    verbose: bool = False,
 ) -> str:
     """One timestamp, and a state only when it is not fresh.
 
-    The card line used to read "as of 14:15 · updated 14:22 · fresh · partial" plus the
-    hold reasons: four ways of saying when the card was last updated, none of which said
-    which one mattered. The card now answers exactly one question — when was this last
-    updated — and says "stale" or "expired" when that answer is not good enough.
+    Deliberately silent about three things that used to be printed here and read as
+    noise: interaction state ("held:hover+interaction", "pinned"), which the card's own
+    border already shows, coverage ("partial"), which belongs next to the numbers it
+    qualifies, and a second timestamp. A card and its full view show the same line, so
+    they can never disagree about when the data arrived.
 
-    ``verbose`` keeps the whole provenance for the detail view, which has the room and the
-    reader's attention: the source's own date, the fetch time, coverage and connectivity.
-
-    There is deliberately no dwell countdown here. A string that changes every second
-    forced a repaint of every rotating card every second, and this line is the only part
-    of a card that changed on a timer.
+    There is no dwell countdown either: a string that changes every second forced a
+    repaint of every rotating card every second.
     """
     parts: list[str] = []
     if demo:
@@ -62,28 +56,11 @@ def freshness_line(
     if envelope is None:
         parts.append("no source")
         return " · ".join(parts)
-    if verbose:
-        if pinned:
-            parts.append("pinned")
-        if held_reasons:
-            parts.append("held:" + "+".join(held_reasons))
-    if verbose:
-        # Both times, because the difference between them is the reason to look here: the
-        # source's own date is not the moment this dashboard fetched it.
-        if envelope.as_of is not None:
-            parts.append(f"as of {_local(envelope.as_of, timezone, now)}")
-        if envelope.fetched_at is not None:
-            parts.append(f"updated {_local(envelope.fetched_at, timezone, now)}")
-    else:
-        moment = envelope.fetched_at or envelope.as_of
-        if moment is not None:
-            label = "updated" if envelope.fetched_at is not None else "as of"
-            parts.append(f"{label} {_local(moment, timezone, now)}")
-    if verbose:
-        parts.append(str(envelope.freshness))
-        if envelope.is_partial:
-            parts.append("partial")
-    elif envelope.freshness not in {Freshness.FRESH, Freshness.NONE}:
+    moment = envelope.fetched_at or envelope.as_of
+    if moment is not None:
+        label = "updated" if envelope.fetched_at is not None else "as of"
+        parts.append(f"{label} {_local(moment, timezone, now)}")
+    if envelope.freshness not in {Freshness.FRESH, Freshness.NONE}:
         parts.append(str(envelope.freshness))
     if envelope.connectivity is not Connectivity.OK and envelope.has_payload:
         parts.append(str(envelope.connectivity))

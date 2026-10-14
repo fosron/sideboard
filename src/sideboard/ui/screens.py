@@ -171,21 +171,24 @@ class DetailScreen(DismissOnOutsideClick, ModalScreen[None]):
         url_provider: Callable[[], str | None],
         item_provider: Callable[[], str | None],
         selected_index: int = 0,
-        provenance: str = "",
+        freshness: str = "",
     ) -> None:
         super().__init__()
         self.view_title = title
         self.view = view
         self.privacy = privacy
         self.index = selected_index
-        self.provenance = provenance
+        self.freshness = freshness
         self._url_provider = url_provider
         self._item_provider = item_provider
 
     def compose(self) -> object:
         wrapper = VerticalScroll(id="sb-detail")
         wrapper.border_title = single_line(self.view_title, 60)
-        wrapper.border_subtitle = single_line(self.view.footnote or "", 60) or None
+        # The same one timestamp the card shows, in the same place a card puts it. The
+        # view's own footnote is rendered once, in the body, where it can be read in full
+        # instead of being cut to fit a border.
+        wrapper.border_subtitle = single_line(self.freshness, 60) or None
         yield wrapper
 
     def on_mount(self) -> None:
@@ -208,10 +211,6 @@ class DetailScreen(DismissOnOutsideClick, ModalScreen[None]):
         width = max(40, self.size.width - 8)
         head = self.query_one("#sb-detail-head", Static)
         sections: list[RenderableType] = []
-        if self.provenance:
-            # The card shows one timestamp; where it came from, when it was fetched and
-            # whether it is partial belong here, next to the numbers they qualify.
-            sections.append(Text(single_line(self.provenance, width), style=DIM))
         sections.append(
             render_view_body(
                 self.view,

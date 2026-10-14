@@ -584,10 +584,8 @@ class SideboardApp(App[None]):
             envelope,
             now=self.runtime.clock.now(),
             timezone=self.timezone,
-            held_reasons=hold_reasons,
             demo=self.demo,
             offline=self.offline,
-            pinned=pinned,
         )
         card.set_card(
             widget_id=widget_id,
@@ -946,15 +944,13 @@ class SideboardApp(App[None]):
         instance = self.runtime.config.widget(widget_id)
         title = instance.title if instance is not None and instance.title else widget_id
         self._apply_global_hold(HoldReason.MODAL, True)
-        provenance = freshness_line(
+        # The full view shows the card's own line, so the two cannot disagree.
+        freshness = card.freshness or freshness_line(
             card.envelope,
             now=self.runtime.clock.now(),
             timezone=self.timezone,
-            held_reasons=card.hold_reasons,
             demo=self.demo,
             offline=self.offline,
-            pinned=card.is_pinned,
-            verbose=True,
         )
         self.push_screen(
             DetailScreen(
@@ -964,7 +960,7 @@ class SideboardApp(App[None]):
                 url_provider=card.selected_url,
                 item_provider=card.selected_id,
                 selected_index=card.cursor_index,
-                provenance=provenance,
+                freshness=freshness,
             ),
             callback=self._after_modal,
         )
