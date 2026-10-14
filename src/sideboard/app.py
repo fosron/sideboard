@@ -18,6 +18,7 @@ from urllib.parse import urlsplit
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding, BindingType
+from textual.containers import Horizontal
 from textual.message import Message
 from textual.widgets import Static, TabbedContent, TabPane
 
@@ -223,7 +224,7 @@ class SideboardApp(App[None]):
         self._last_second: int = -1
         self._active_tab: str | None = None
         self._hold_timers: dict[str, Any] = {}
-        self._last_tabbar = ""
+        self._last_footer_status = ""
         self._last_footer = ""
         self._reload_note = ""
         self._mouse_screen: MouseDiagnosticScreen | None = None
@@ -255,9 +256,14 @@ class SideboardApp(App[None]):
     # ------------------------------------------------------------------ compose
 
     def compose(self) -> ComposeResult:
-        yield Static(id="sb-tabbar")
+        # The tabs are the first row: the application name and the clock live in the
+        # footer, so the window gives one more row to the cards.
         yield TabbedContent(id="sb-body")
-        yield Static(id="sb-footer")
+        yield Horizontal(
+            Static(id="sb-footer-status"),
+            Static("? help", id="sb-footer-help"),
+            id="sb-footer",
+        )
 
     # ------------------------------------------------------------------ lifecycle
 
@@ -726,10 +732,10 @@ class SideboardApp(App[None]):
                 labels.append(f"{status.unavailable_count} unavailable")
         if self._reload_note:
             labels.append(self._reload_note)
-        tabbar = "Sideboard · " + " · ".join(labels)
-        if force or tabbar != self._last_tabbar:
-            self._last_tabbar = tabbar
-            self._update_static("#sb-tabbar", tabbar)
+        line = "Sideboard · " + " · ".join(labels)
+        if force or line != self._last_footer_status:
+            self._last_footer_status = line
+            self._update_static("#sb-footer-status", line)
         # One hint, not a keyboard reference: the dashboard is read from across a room, and
         # `?` lists every key for the moment someone actually needs one.
         footer = "? help"

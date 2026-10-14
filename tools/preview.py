@@ -36,8 +36,14 @@ ENTITIES = (
 
 
 def screen_text(app: SideboardApp) -> str:
-    """Plain text of the composited screen, in reading order."""
+    """Plain text of the composited screen, in reading order.
+
+    Rich's screenshot decorates the export with the application title and traffic-light
+    circles above the screen. They are not rows of the terminal, so the title element is
+    dropped: a preview that showed them would invent a line the user never sees.
+    """
     svg = app.export_screenshot()
+    svg = re.sub(r'<text class="[^"]*-title"[^>]*>.*?</text>', "", svg, flags=re.S)
     rows: dict[float, list[tuple[float, str]]] = {}
     for match in TEXT_ELEMENT.finditer(svg):
         x, y, body = float(match.group(1)), float(match.group(2)), match.group(3)

@@ -98,9 +98,11 @@ read, capped at 1 MiB.
 
 ## 3. Controls
 
-The footer shows one hint, `? help`. Every key is in the help screen (`?`) and in this
-table; the footer deliberately does not list them, because a dashboard read from across a
-room does not need a keyboard reference on screen.
+The bottom bar carries the application name and the clock with the mode markers
+(`Sideboard · 14:52 · DEMO DATA · 1 stale`) on the left, and one hint, `? help`, on the
+right. Every key is in the help screen (`?`) and in this table; the bar deliberately does
+not list them, because a dashboard read from across a room does not need a keyboard
+reference on screen. The tabs are the first row, so the cards get the rest of the window.
 
 | Input | Action |
 |---|---|
@@ -214,8 +216,8 @@ Recorded on the development Mac (macOS, Python 3.14, `TERM_PROGRAM=muxy`):
   by redraws; card rendering is signature-gated, so an unchanged card does not repaint
 * the app keeps collecting while another Mac window is focused (no app-level pause)
 * real-terminal smoke test (pseudo-terminal via `script`, `--demo`, 25 s): the app
-  started, rendered the tab row for all six tabs, the status bar
-  (`Sideboard · HH:MM · DEMO DATA · 1 stale`), the footer controls and a full bordered
+  started, rendered the tab row for all six tabs, the bottom bar
+  (`Sideboard · HH:MM · DEMO DATA · 1 stale` and `? help`) and a full bordered
   modal screen with live counters; it collected demo data (a 346 KB WAL in the demo
   database) and exited cleanly. No stylesheet, Rich-style, identifier or `NoMatches`
   errors appeared in the session or the log file

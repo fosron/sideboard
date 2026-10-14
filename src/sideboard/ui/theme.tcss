@@ -5,22 +5,31 @@ Screen {
     color: $foreground;
 }
 
-#sb-tabbar {
-    height: 1;
-    background: $background;
-    color: $sb-dim;
-    padding: 0 1;
-}
-
 #sb-body {
     height: 1fr;
 }
 
+/* One bar at the bottom: what this is and when it was last refreshed on the left, where
+   the keys are on the right. It carries a panel background so it reads as chrome rather
+   than as a stray line of text on the screen. */
 #sb-footer {
     height: 1;
-    background: $background;
+    background: $panel;
     color: $sb-dim;
     padding: 0 1;
+}
+
+#sb-footer-status {
+    width: 1fr;
+    background: $panel;
+    color: $sb-dim;
+}
+
+#sb-footer-help {
+    width: auto;
+    background: $panel;
+    color: $sb-dim;
+    text-align: right;
 }
 
 TabbedContent {
