@@ -40,5 +40,10 @@ SIDEBOARD_THEME = Theme(
         "sb-border": "#2a323a",
         "sb-border-focus": "#7aa2c8",
         "sb-held": "#d8b26a",
+        # Focus has to be unmistakable: a card that merely received the pointer, or is
+        # pinned, used the same colour, so a walk with Tab left every card looking alike.
+        "sb-focus": "#a9cdf2",
+        "sb-focus-bg": "#1e2833",
+        "sb-border-held": "#4c5866",
     },
 )

@@ -101,12 +101,14 @@ class DetailScreen(ModalScreen[None]):
         url_provider: Callable[[], str | None],
         item_provider: Callable[[], str | None],
         selected_index: int = 0,
+        provenance: str = "",
     ) -> None:
         super().__init__()
         self.view_title = title
         self.view = view
         self.privacy = privacy
         self.index = selected_index
+        self.provenance = provenance
         self._url_provider = url_provider
         self._item_provider = item_provider
 
@@ -123,12 +125,17 @@ class DetailScreen(ModalScreen[None]):
     def _refresh_body(self) -> None:
         width = max(40, self.size.width - 8)
         body = self.query_one("#sb-detail-body", Static)
-        body.update(
+        sections: list[RenderableType] = []
+        if self.provenance:
+            # The card shows one timestamp; where it came from, when it was fetched and
+            # whether it is partial belong here, next to the numbers they qualify.
+            sections.append(Text(single_line(self.provenance, width), style=DIM))
+        sections.append(
             render_view_body(
                 self.view, width=width, privacy=self.privacy, selected_index=self.index
-            ),
-            layout=False,
+            )
         )
+        body.update(Group(*sections), layout=False)
 
     def _rows(self) -> int:
         """Rows the cursor can reach: the table when there is one, otherwise the items."""

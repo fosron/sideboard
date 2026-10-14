@@ -191,3 +191,68 @@ def test_no_rich_style_name_strings_remain_in_the_ui() -> None:
             if pattern.search(line) and "set_class" not in line and "classes=" not in line:
                 offenders.append(f"{path.relative_to(root)}:{number}: {line.strip()}")
     assert not offenders, "Rich style names used as strings:\n" + "\n".join(offenders)
+
+
+def test_a_card_line_says_one_thing_about_time() -> None:
+    """The card line answers "when was this updated", and nothing else.
+
+    It used to read "as of 14:15 · updated 14:22 · fresh · partial": two timestamps, a
+    state that is the normal case, and a coverage word, with no way to tell which one
+    mattered. The detail view keeps all of it (verbose=True).
+    """
+    from datetime import UTC, datetime
+
+    from sideboard.core.contracts import Connectivity, Coverage, Freshness, SourceEnvelope
+    from sideboard.ui.card import freshness_line
+
+    now = datetime(2026, 10, 14, 14, 30, tzinfo=UTC)
+    envelope = SourceEnvelope(
+        source_id="news",
+        payload_schema="news.feeds",
+        payload_schema_version=1,
+        connectivity=Connectivity.OK,
+        freshness=Freshness.FRESH,
+        as_of=datetime(2026, 10, 14, 14, 15, tzinfo=UTC),
+        fetched_at=datetime(2026, 10, 14, 14, 22, tzinfo=UTC),
+        coverage=Coverage(observed=3, expected=8),
+    )
+    compact = freshness_line(
+        envelope, now=now, timezone="UTC", held_reasons=("hover", "interaction"), pinned=True
+    )
+    assert compact == "updated 14:22"
+    verbose = freshness_line(
+        envelope, now=now, timezone="UTC", held_reasons=("hover",), pinned=True, verbose=True
+    )
+    assert "as of 14:15" in verbose and "updated 14:22" in verbose
+    assert "fresh" in verbose and "partial" in verbose and "held:hover" in verbose
+
+    stale = SourceEnvelope(
+        source_id="news",
+        payload_schema="news.feeds",
+        payload_schema_version=1,
+        connectivity=Connectivity.OK,
+        freshness=Freshness.STALE,
+        fetched_at=datetime(2026, 10, 14, 12, 0, tzinfo=UTC),
+    )
+    assert freshness_line(stale, now=now, timezone="UTC") == "updated 12:00 · stale"
+
+
+def test_focus_held_and_pinned_are_three_different_looks() -> None:
+    """A card's state must be readable at a glance.
+
+    Focus, "the pointer is over this" and "this is pinned" all drew the same amber border,
+    so walking the grid with Tab left every visited card looking like the focused one. The
+    three states now use three different colours, and pinned is marked by the diamond in
+    the title instead of by a border colour.
+    """
+    from sideboard.ui.theme import SIDEBOARD_THEME
+
+    variables = SIDEBOARD_THEME.variables
+    focus = variables["sb-focus"]
+    held = variables["sb-border-held"]
+    plain = variables["sb-border"]
+    assert len({focus, held, plain}) == 3, "focus, held and default must not share a colour"
+    css = (Path(__file__).resolve().parents[2] / "src/sideboard/ui/theme.tcss").read_text()
+    assert "CardShell:focus" in css and "background: $sb-focus-bg" in css
+    pinned = css[css.index("CardShell.sb-pinned") :].split("}")[0]
+    assert "sb-border;" in pinned, "a pinned card keeps the plain border"

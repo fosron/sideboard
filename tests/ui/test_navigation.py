@@ -186,3 +186,26 @@ async def test_the_detail_view_can_be_walked_with_arrows(tmp_path: Path) -> None
         await pilot.pause()
         assert app.focused_card() is card, "closing returns to the card"
     await app.runtime.database.aclose()
+
+
+async def test_focus_moves_the_hold_instead_of_accumulating_one(tmp_path: Path) -> None:
+    """Only the card the keyboard is on is held.
+
+    Each card used to keep its interaction hold for fifteen seconds after being visited,
+    so a walk with Tab left every card drawn as if it were the focused one.
+    """
+    app = await make_app(tmp_path)
+    async with app.run_test(size=(140, 44)) as pilot:
+        await asyncio.sleep(1.0)
+        rotation = app._rotation
+        assert rotation is not None
+        cards = app._active_cards()
+        cards[0].focus()
+        app._apply_interaction_hold(cards[0].card_key)
+        await pilot.pause()
+        await pilot.press("right")
+        await pilot.pause()
+        assert app.focused_card() is cards[1]
+        assert rotation.held("a") is False, "the card left behind must not stay held"
+        assert rotation.held("b") is True, "the card in focus stays put"
+    await app.runtime.database.aclose()

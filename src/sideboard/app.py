@@ -922,6 +922,16 @@ class SideboardApp(App[None]):
         instance = self.runtime.config.widget(widget_id)
         title = instance.title if instance is not None and instance.title else widget_id
         self._apply_global_hold(HoldReason.MODAL, True)
+        provenance = freshness_line(
+            card.envelope,
+            now=self.runtime.clock.now(),
+            timezone=self.timezone,
+            held_reasons=card.hold_reasons,
+            demo=self.demo,
+            offline=self.offline,
+            pinned=card.is_pinned,
+            verbose=True,
+        )
         self.push_screen(
             DetailScreen(
                 title=title,
@@ -930,6 +940,7 @@ class SideboardApp(App[None]):
                 url_provider=card.selected_url,
                 item_provider=card.selected_id,
                 selected_index=card.cursor_index,
+                provenance=provenance,
             ),
             callback=self._after_modal,
         )
@@ -1351,6 +1362,7 @@ class SideboardApp(App[None]):
         self._focus_card(target)
 
     def _focus_card(self, target: CardShell) -> None:
+        previous = self.focused_card()
         self._user_navigation = True
         try:
             target.focus()
@@ -1360,7 +1372,20 @@ class SideboardApp(App[None]):
                 target.scroll_visible()
         finally:
             self._user_navigation = False
+        if previous is not None and previous is not target:
+            # The hold moves with the keyboard: holding every card that was ever visited
+            # left the whole grid looking highlighted.
+            self._release_interaction_hold(previous.card_key)
         self._apply_interaction_hold(target.card_key)
+
+    def _release_interaction_hold(self, card_key: str) -> None:
+        rotation = self._rotation
+        slot_id = self._slot_of_card(card_key)
+        if rotation is None or slot_id is None:
+            return
+        self._cancel_hold_timer(slot_id)
+        if rotation.set_hold(slot_id, HoldReason.INTERACTION, False):
+            self._schedule_slot_repaint(slot_id)
 
     def _cycle_card(self, step: int) -> bool:
         """Walk the cards of the visible tab and wrap. False when not on a card.
