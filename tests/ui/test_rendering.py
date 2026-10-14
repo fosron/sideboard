@@ -300,6 +300,14 @@ BANNED_TEXT = (
     "held:",
     "pinned ·",
     "as of 1",  # a second timestamp next to "updated"
+    "queued or in progress",
+    "not produced a payload yet",
+    "waiting for the next successful refresh",
+    "add a position manually",
+    "run `sideboard init`",
+    "relevance filtered",
+    "generated ",
+    "unavailable: ",
 )
 
 
@@ -336,3 +344,26 @@ async def test_no_screen_prints_explanations_or_credits(tmp_path: Path) -> None:
             lowered = text.lower()
             for phrase in BANNED_TEXT:
                 assert phrase not in lowered, f"{name} still prints {phrase!r}"
+
+
+def test_a_status_is_a_state_not_a_paragraph() -> None:
+    """`detail` and `hints` are recorded for diagnostics and never drawn.
+
+    They were printed under the headline, which put sentences like "No workflow is queued
+    or in progress, and nothing failed recently." on a card that already said
+    "running 0 · failed 0".
+    """
+    from sideboard.core.contracts import Severity, StatusView
+    from sideboard.ui.renderers import render_status
+
+    status = StatusView(
+        severity=Severity.WARNING,
+        headline="Source unreachable",
+        detail="The last three attempts failed with a timeout after twenty seconds.",
+        hints=("Check the network", "Run sideboard doctor"),
+    )
+    rendered = _rendered_text(render_status(status, width=80))
+    assert "Source unreachable" in rendered
+    assert "WARNING" in rendered
+    assert "timeout" not in rendered, rendered
+    assert "doctor" not in rendered, rendered

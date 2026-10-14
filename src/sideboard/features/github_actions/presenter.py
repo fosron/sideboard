@@ -128,14 +128,11 @@ def present_actions(inputs: PresentInput) -> ViewModel:
     if settings.show_failures:
         items.extend(_item(run, now, badge=f"{run.short_repo} ✗") for run in failures)
     if not items:
+        # Nothing running, nothing failed: the two metrics already say exactly that, and a
+        # reassurance line under them is text a glance does not need.
         return ViewModel(
             title="Actions",
             metrics=tuple(metrics),
-            status=StatusView(
-                severity=Severity.OK,
-                headline="Nothing running",
-                detail="No workflow is queued or in progress, and nothing failed recently.",
-            ),
             privacy=Privacy.PRIVATE,
         )
     return ViewModel(

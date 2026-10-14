@@ -142,7 +142,8 @@ def present(request: PresentInput) -> ViewModel:
     subtitle: str | None = None
     ordering_note: str | None = None
     if settings.relevance_filter:
-        subtitle = RELEVANCE_NOTE
+        # The note explained a filter. A list is a list; how it was ordered is not drawn.
+        subtitle = None
         ranked = relevance_rank(stories, context.now)
         if ranked == stories:
             ordering_note = "no score/age signal; API order kept"

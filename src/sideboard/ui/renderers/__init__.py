@@ -91,22 +91,17 @@ def render_metrics(
 
 
 def render_status(status: StatusView, *, width: int) -> RenderableType:
+    """The state in one line: severity and headline.
+
+    ``detail`` and ``hints`` stay in the view model — diagnostics, `doctor` and the docs use
+    them — but they are not drawn: a card says what is wrong, not how to fix it, and a
+    sentence of explanation on a dashboard is the noise it is meant to replace.
+    """
     style = SEVERITY_STYLE.get(status.severity, DIM)
-    parts: list[Text] = []
     headline = Text()
     headline.append(f"{status.severity.value.upper()}  ", style=style)
     headline.append(single_line(status.headline, max(10, width - 12)), style=VALUE)
-    parts.append(headline)
-    if status.detail:
-        body = Text()
-        body.append(single_line(status.detail, max(20, width * 2)), style=DIM)
-        parts.append(body)
-    for hint in status.hints:
-        hint_text = Text()
-        hint_text.append("· ", style=DIM)
-        hint_text.append(single_line(hint, max(20, width * 2)), style=DIM)
-        parts.append(hint_text)
-    return Group(*parts)
+    return Group(headline)
 
 
 def render_item_row(raw: object, *, width: int, privacy: bool, selected: bool = False) -> Text:

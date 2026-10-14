@@ -272,7 +272,8 @@ def _short(moment: datetime) -> str:
 
 
 def _subtitle(document: SnapshotDocument) -> str:
-    return f"{document.source_id} · generated {_short(document.generated_at)}"
+    """Who produced it. When it was generated is the timestamp line's job."""
+    return document.source_id
 
 
 def _title(document: SnapshotDocument, use_snapshot_title: bool) -> str | None:

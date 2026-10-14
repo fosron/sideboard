@@ -23,7 +23,6 @@ from sideboard.features.hackernews.config import HackerNewsWidgetSettings
 from sideboard.features.hackernews.feature import FEATURE
 from sideboard.features.hackernews.models import HackerNewsPayload, Story
 from sideboard.features.hackernews.presenter import (
-    RELEVANCE_NOTE,
     WIDGET,
     age_text,
     present,
@@ -145,7 +144,9 @@ def test_relevance_filter_differs_from_raw_order_and_declares_it() -> None:
 
     assert [item.id for item in raw.items] == ["hn:1", "hn:2", "hn:3", "hn:4"]
     assert raw.subtitle is None
-    assert filtered.subtitle == RELEVANCE_NOTE
+    # The note that said "relevance filtered (not the raw HN ranking)" is not drawn:
+    # the reordering is visible from the list itself.
+    assert filtered.subtitle is None
     assert [item.id for item in filtered.items] == ["hn:3", "hn:4"]
     assert {item.id for item in filtered.items} != {item.id for item in raw.items}
     assert relevance_rank(list(stories), NOW) == relevance_rank(list(stories), NOW)
@@ -157,7 +158,7 @@ def test_relevance_rank_without_score_signal_keeps_api_order() -> None:
     view = _present(
         _payload(tuple(stories)), settings=HackerNewsWidgetSettings(relevance_filter=True)
     )
-    assert view.subtitle == RELEVANCE_NOTE
+    assert view.subtitle is None
     assert [item.id for item in view.items] == ["hn:1", "hn:2"]
     assert view.footnote is not None and "API order" in view.footnote
 

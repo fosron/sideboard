@@ -240,11 +240,16 @@ def test_the_card_lists_running_runs_before_failures() -> None:
     assert "✗" in (view.items[2].badge or ""), "a failure is marked in its badge"
 
 
-def test_nothing_running_says_so_instead_of_an_empty_list() -> None:
+def test_nothing_running_is_left_to_the_metrics() -> None:
+    """No list, no reassurance line: "running 0 · failed 0" is the whole statement."""
     payload = demo_payload().model_copy(update={"running": (), "failures": (), "runs": ()})
     view = view_for(payload)
     assert view.items == ()
-    assert view.status is not None and view.status.headline == "Nothing running"
+    assert view.status is None
+    running = view.metric("running")
+    failed = view.metric("failed")
+    assert running is not None and running.value_text == "0"
+    assert failed is not None and failed.value_text == "0"
 
 
 def test_the_detail_view_is_a_table_of_runs() -> None:

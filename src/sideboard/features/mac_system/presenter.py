@@ -286,10 +286,11 @@ def present_details(inputs: PresentInput) -> ViewModel:
                     basis="cumulative counter",
                 )
             )
-    unavailable = ", ".join(payload.unavailable) if payload.unavailable else None
     return ViewModel(
         title="Mac details",
-        subtitle=(unavailable and f"unavailable: {unavailable}") or None,
+        # A sensor the collector does not provide renders as an em dash on its row; the
+        # sentence listing them is not drawn.
+        subtitle=None,
         metrics=tuple(metrics),
         series=tuple(series),
         table=table,

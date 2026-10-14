@@ -145,8 +145,10 @@ reference on screen. The tabs are the first row, so the cards get the rest of th
   recorded in the payload and in the widget contract but **not drawn anywhere** — not on a
   card, not in a full view, not under a table. A card shows values; a full view shows more
   values. The only extra words allowed are real states: a source that has no data yet, a
-  service expected up that is not, a table cut short ("truncated"), a degraded connection,
-  and the one `stale`/`expired` word on the timestamp line.
+  service expected up that is not, a feed that failed, a table cut short ("truncated"), a
+  degraded connection, and the one `stale`/`expired` word on the timestamp line. A state is
+  one short line — `StatusView.detail` and `hints` are recorded for `doctor` and the docs
+  and are not drawn, and a card with nothing wrong shows no state line at all.
 * **A missing value is an em dash.** Why it is missing is not printed beside it.
 * **A modal closes when you click outside it.** The detail, help, palette and theme
   pickers are centred with a margin all round; clicking that margin dismisses them, and a

@@ -267,10 +267,9 @@ def _detail_view(
         footnote += f" · no article for: {', '.join(empty)}"
     return ViewModel(
         title="News",
-        subtitle=(
-            " · ".join(BUCKET_LABELS.get(bucket, bucket) for bucket in buckets)
-            + (f" · failing feeds: {', '.join(feeds_failed)}" if feeds_failed else "")
-        ),
+        # No legend of bucket names: the rows are the news. A feed that failed is a
+        # problem, so that part stays.
+        subtitle=(f"failing feeds: {', '.join(feeds_failed)}" if feeds_failed else None),
         status=envelope_status,
         metrics=tuple(metrics),
         items=tuple(items[: settings.limit * 4]),
