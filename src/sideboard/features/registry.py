@@ -16,6 +16,8 @@ from ..core.registry import Registry, build_registry
 from .diagnostics import FEATURE as DIAGNOSTICS
 from .docker_local import FEATURE as DOCKER_LOCAL
 from .fx import FEATURE as FX
+from .git_local import FEATURE as GIT_LOCAL
+from .github_actions import FEATURE as GITHUB_ACTIONS
 from .hackernews import FEATURE as HACKERNEWS
 from .local_snapshot import FEATURE as LOCAL_SNAPSHOT
 from .mac_system import FEATURE as MAC_SYSTEM
@@ -29,6 +31,8 @@ from .youtube import FEATURE as YOUTUBE
 __all__ = ["FEATURES", "build_feature_registry"]
 
 FEATURES: tuple[FeatureSpec, ...] = (
+    GITHUB_ACTIONS,
+    GIT_LOCAL,
     WEATHER,
     NEWS,
     HACKERNEWS,

@@ -18,6 +18,8 @@ This index is generated from the live registry, so it matches the running code.
 | markets | `markets.quotes` | `markets.quotes` v1 | http_public | 3600 / 3600 / 14400 s | explicit symbol mapping, optional extra | yes |
 | mac_system | `mac.metrics` | `mac.metrics` v1 | local_metrics | 5 / 15 / 60 s | none | yes |
 | docker_local | `docker.containers` | `docker.containers` v1 | cli | 15 / 15 / 60 s | pinned local context | yes |
+| github_actions | `github.actions` | `github.actions` v1 | cli | 60 / 90 / 180 s | an authenticated `gh` CLI and a repo list | yes |
+| git_local | `git.repositories` | `git.repositories` v1 | cli | 120 / 300 / 900 s | a list of local checkout paths | yes |
 | local_snapshot | `local_snapshot.file` | `local_snapshot.file` v1 | file | 30 / 60 / 120 s | an explicit file path | yes |
 | diagnostics | — | host-owned runtime status | — | — | none | n/a |
 
@@ -44,6 +46,8 @@ widget consumes owns no recurring task at all.
 | `mac.details` | `primary`: mac.metrics | infrastructure | full metric set | swap, uptime, per-volume disk, I/O, optional processes |
 | `docker.summary` | `primary`: docker.containers | infrastructure | context, counts, engine CPU and memory | engine identity and collected notes |
 | `docker.table` | `primary`: docker.containers | infrastructure | containers grouped by Compose project | table with restarts and notes |
+| `github.actions` | `primary`: github.actions | dev | running runs, then recent failures | table of recent runs with branch, event and age |
+| `git.status` | `primary`: git.repositories | dev | checkouts with uncommitted work, ahead/behind | table with branch, changes and last commit |
 | `local_snapshot.metrics` | `primary`: local_snapshot.file (optional) | infrastructure | producer metrics with histories | all metrics with their basis |
 | `local_snapshot.items` | `primary`: local_snapshot.file (optional) | infrastructure | producer items | longer item list |
 | `diagnostics.sources` | — (host-owned) | infrastructure | counts and short table | full source table and setup problems |
@@ -92,6 +96,8 @@ A widget with an `optional` input renders an honest state when that binding is a
 | markets | `src/sideboard/features/markets/` | covered by integration tests | synthetic payload |
 | mac_system | `src/sideboard/features/mac_system/` | `tests/features/mac_system/` | fake `psutil` adapter |
 | docker_local | `src/sideboard/features/docker_local/` | `tests/features/docker_local/` | fake command runner |
+| github_actions | `src/sideboard/features/github_actions/` | `tests/features/github_actions/` | fake command runner returning REST run lists |
+| git_local | `src/sideboard/features/git_local/` | `tests/features/git_local/` | fake command runner returning porcelain v2 |
 | local_snapshot | `src/sideboard/features/local_snapshot/` | `tests/features/local_snapshot/` | valid/invalid/partial snapshots |
 | diagnostics | `src/sideboard/features/diagnostics/` | `tests/features/fx/` covers the presenters | — |
 
@@ -113,6 +119,16 @@ synthetic.
 * Missing quotes and missing FX rates are shown as missing, not as zero.
 * Docker Desktop storage figures describe the engine's disk image, not the Mac
   filesystem.
+* GitHub Actions is read through the authenticated `gh` CLI: one REST call per
+  repository per refresh, newest runs only, so a failure older than the fetched page is
+  not claimed. The token lives in gh's own keyring and is never read, stored or shown by
+  this application. Nothing can cancel, retry or dispatch a workflow.
+* GitHub's GraphQL `Repository` type has no Actions field; a `workflowRuns` selection
+  fails, so the REST endpoint is the only route.
+* Local git reads `status --porcelain=v2` and one `log -1` per checkout, with
+  `--no-optional-locks`. Nothing is fetched, pulled, staged, committed, checked out or
+  cleaned, and the index is not refreshed. Which files changed is deliberately not shown:
+  it grows with the repository and cannot be read in a card row.
 * Solar, IBKR Flex, mailbox automation, calendar access, Tailscale and release/CI
   widgets from the plan's optional list are **not implemented**; `local_snapshot.file`
   is the intended route for them and needs no Python.

@@ -107,6 +107,23 @@ the `fx_rates` table, so `import fx` only worked where the table had been create
 hand. `tests/contracts/test_migrations.py` now asserts that every table a repository
 reads is created by a registered migration.
 
+## Dev sources (2026-10-14)
+
+Probed on the machine this was built on, read-only:
+
+* `gh` 2.100.0, authenticated as a real account with `repo`, `workflow`, `read:org` and
+  `gist` scopes. `gh api "/repos/<owner>/<name>/actions/runs?per_page=12"` returned live
+  runs, including three in progress and two recent failures, in about 0.8 s per
+  repository; six repositories cost 8.3 s of one child process at a time.
+* `gh api graphql` was tried first and **fails**: `Field 'workflowRuns' doesn't exist on
+  type 'Repository'`. The REST endpoint is the supported route.
+* `gh search prs --review-requested=@me` and `gh api /notifications` also work; neither is
+  implemented yet.
+* `git status --porcelain=v2 --branch` and `git log -1` returned branch, ahead/behind,
+  changed and untracked counts and the last commit for six real checkouts.
+* No Linear, GitLab, Jira or Sentry CLI is installed, and no API key is present in the
+  environment, so those integrations are unimplemented rather than unverified.
+
 ## Unconfigured, blocked or unverified
 
 | Item | State |
