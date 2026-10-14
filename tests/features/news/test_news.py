@@ -356,3 +356,27 @@ def test_digest_rules_defaults_are_documented_values() -> None:
     assert rules.digest_size == 6
     assert rules.max_ai_items_per_digest == 2
     assert "local" in rules.bucket_order
+
+
+def test_a_longer_digest_fills_from_the_same_buckets() -> None:
+    """A digest of ten gets ten when ten are fresh, not six.
+
+    The builder filled one article per bucket and then only added articles from *other*
+    categories, so asking for more than the bucket count produced exactly the bucket count:
+    a card with room for ten headlines showed six and looked cropped.
+    """
+    articles = tuple(
+        article(
+            index,
+            category=("local", "lithuania", "europe", "world", "business", "software")[index % 6],
+            source=f"feed-{index % 8}",
+            age_hours=index,
+        )
+        for index in range(20)
+    )
+    digest = build_digest(articles, now=NOW, digest_size=10, max_per_source=3, max_ai=0)
+    assert len(digest) == 10
+    categories = [item.category for item in digest]
+    assert categories[0:6] == ["local", "lithuania", "europe", "world", "business", "software"]
+    # The second round repeats the buckets in order rather than draining one feed.
+    assert len(set(categories[6:])) >= 2

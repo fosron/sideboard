@@ -98,20 +98,27 @@ def build_digest(
         chosen.append(article)
         return True
 
-    for bucket in buckets:
-        if len(chosen) >= digest_size:
-            break
-        for article in fresh:
-            if article.category != bucket:
-                continue
-            if take(article):
+    # One per bucket per round, then anything else fresh. The first pass alone filled the
+    # buckets and stopped, so a digest longer than the bucket count had nothing left to add
+    # and the card looked cropped with half of it empty. Extra rounds keep it balanced
+    # rather than letting the newest feed take every row.
+    for _round in range(max(1, digest_size)):
+        added = False
+        for bucket in buckets:
+            if len(chosen) >= digest_size:
                 break
+            for article in fresh:
+                if article.category != bucket or article.canonical in used:
+                    continue
+                if take(article):
+                    added = True
+                    break
+        if len(chosen) >= digest_size or not added:
+            break
     if len(chosen) < digest_size:
         for article in fresh:
             if len(chosen) >= digest_size:
                 break
-            if article.category in buckets:
-                continue
             take(article)
     return tuple(chosen[:digest_size])
 

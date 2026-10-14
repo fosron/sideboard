@@ -475,7 +475,20 @@ class CardShell(Widget, can_focus=True):
         for series in view.series:
             sections.append(render_series(series, width=width))
         if view.items:
-            budget = max(1, height - 3 - (2 if view.metrics else 0))
+            # How many rows the list actually gets: everything above it in the card, plus
+            # one spare. The old formula subtracted a fixed five rows as if every item had
+            # a subtitle, so a card with room for ten headlines showed six and looked
+            # cropped.
+            overhead = 0
+            if view.metrics:
+                per_row = 3 if width >= 96 else 2
+                overhead += (len(view.metrics) + per_row - 1) // per_row
+            overhead += len(view.series)
+            if view.status is not None:
+                overhead += 3
+            if view.footnote:
+                overhead += 1
+            budget = max(1, height - overhead - 1)
             sections.append(
                 render_items(
                     view.items,
