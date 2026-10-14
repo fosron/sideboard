@@ -31,7 +31,7 @@ widget consumes owns no recurring task at all.
 
 | Widget type | Accepted inputs | Category | Compact view | Detail view |
 |---|---|---|---|---|
-| `weather.summary` | `primary`: weather.forecast | world | temperature, wind, rain next 6 h | current conditions, 24 h, 7-day table |
+| `weather.summary` | `primary`: weather.forecast | world | temperature, wind, rain next 6 h | current conditions, the next hours, then the 7-day table |
 | `news.digest` | `primary`: news.feeds | world | deterministic diversity digest | per-bucket list plus feed health |
 | `news.saved` | — (local state) | world | saved reading/video links | same list, longer |
 | `hackernews.list` | `primary`: hackernews.stories | software | ranked item list | up to 30 items |
@@ -52,6 +52,12 @@ widget consumes owns no recurring task at all.
 | `local_snapshot.items` | `primary`: local_snapshot.file (optional) | infrastructure | producer items | longer item list |
 | `diagnostics.sources` | — (host-owned) | infrastructure | counts and short table | full source table and setup problems |
 | `diagnostics.host` | — (host-owned) | infrastructure | mode, config revision, paths | same with pending writes |
+
+Weather rows link to the location's public forecast page
+(`yr.no/en/forecast/daily-table/<lat>,<lon>`, built from the coordinates the source was
+configured with): a forecast row has no article behind it, and "no link on this row" on
+every row is not useful either. An hour that is not today carries its weekday, so a bare
+"09:00" cannot read as belonging to the last date of the table.
 
 The YouTube list takes one upload per channel per turn (`spread_channels`, on by default):
 with a favourites-first ranking and no watch history, one favourite channel that uploads

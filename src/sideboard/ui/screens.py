@@ -50,11 +50,14 @@ def render_view_body(
     privacy: bool,
     selected_index: int = 0,
     items_as_rows: bool = False,
+    include_table: bool = True,
 ) -> RenderableType:
     """Detail-mode rendering of a whole standard view model.
 
     ``selected_index`` marks the row the cursor is on, so the detail view can be walked
-    with the arrow keys and opened from there.
+    with the arrow keys and opened from there. ``items_as_rows`` and ``include_table`` let
+    the modal place those two sections itself: its rows are widgets, and the table belongs
+    *after* them so hours read before days.
     """
     sections: list[RenderableType] = []
     if view.title:
@@ -67,10 +70,6 @@ def render_view_body(
         sections.append(render_metrics(view.metrics, width=width, privacy=privacy, columns=2))
     for series in view.series:
         sections.append(render_series(series, width=width))
-    if view.table is not None and view.table.columns:
-        sections.append(
-            render_table(view.table, width=width, privacy=privacy, selected_index=selected_index)
-        )
     if view.items and not items_as_rows:
         # The modal renders each item as its own widget so a click can land on it; every
         # other caller gets the whole list as one renderable.
@@ -82,6 +81,10 @@ def render_view_body(
                 selected_index=selected_index,
                 max_rows=200,
             )
+        )
+    if include_table and view.table is not None and view.table.columns:
+        sections.append(
+            render_table(view.table, width=width, privacy=privacy, selected_index=selected_index)
         )
     # Deliberately no footnote line: explanations and credits are not drawn anywhere.
     if not sections:
@@ -191,6 +194,7 @@ class DetailScreen(DismissOnOutsideClick, ModalScreen[None]):
         wrapper.mount(Static(id="sb-detail-head"))
         for index in range(len(self.view.items)):
             wrapper.mount(DetailRow(index, Text("")))
+        wrapper.mount(Static(id="sb-detail-table"))
         self._refresh_body()
 
     def _row_widgets(self) -> list[DetailRow]:
@@ -212,9 +216,22 @@ class DetailScreen(DismissOnOutsideClick, ModalScreen[None]):
                 privacy=self.privacy,
                 selected_index=self.index,
                 items_as_rows=True,
+                include_table=False,
             )
         )
         head.update(Group(*sections), layout=False)
+        table = self.query_one("#sb-detail-table", Static)
+        table.update(
+            render_table(
+                self.view.table,
+                width=width,
+                privacy=self.privacy,
+                selected_index=self.index,
+            )
+            if self.view.table is not None and self.view.table.columns
+            else Text(""),
+            layout=False,
+        )
         rows = self._row_widgets()
         for row in rows:
             if row.index >= len(self.view.items):

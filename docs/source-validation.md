@@ -107,6 +107,14 @@ the `fx_rates` table, so `import fx` only worked where the table had been create
 hand. `tests/contracts/test_migrations.py` now asserts that every table a repository
 reads is created by a registered migration.
 
+## Weather forecast links (2026-10-14)
+
+`https://www.yr.no/en/forecast/daily-table/<lat>,<lon>` and
+`https://www.wunderground.com/weather/<lat>,<lon>` both resolve for a coordinate pair
+(HTTP 200); `timeanddate.com/weather/@<lat>,<lon>` does not. The weather rows use the
+yr.no form, built from the coordinates the source was configured with. No API, key or
+scraping is involved — it is a page opened in the user's browser on request.
+
 ## Dev sources (2026-10-14)
 
 Probed on the machine this was built on, read-only:

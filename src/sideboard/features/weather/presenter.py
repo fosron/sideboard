@@ -41,6 +41,19 @@ _RAIN_HOURS = 6
 _HOUR_LIMIT = 24
 _DAY_LIMIT = 7
 
+#: Where a row links to: a public forecast page for the coordinates the source was
+#: configured with. A weather row has no article behind it, and "no link on this row" on
+#: every row of a forecast is not useful either.
+FORECAST_URL = "https://www.yr.no/en/forecast/daily-table/{latitude:.4f},{longitude:.4f}"
+
+
+def _forecast_url(payload: WeatherPayload) -> str | None:
+    """The location's public forecast page, when the payload carries its coordinates."""
+    if payload.latitude is None or payload.longitude is None:
+        return None
+    return FORECAST_URL.format(latitude=payload.latitude, longitude=payload.longitude)
+
+
 #: Bases keep every metric honest about where the number came from.
 _BASIS_CURRENT = "forecast"
 _BASIS_HOURLY = "hourly forecast"
@@ -109,7 +122,7 @@ def present(request: PresentInput) -> ViewModel:
             title=title,
             subtitle=_subtitle(payload, zone),
             metrics=_detail_metrics(payload),
-            items=_hourly_items(payload, settings, zone),
+            items=_hourly_items(payload, settings, zone, now=context.now),
             table=_daily_table(payload, settings),
             footnote=_footnote(payload, zone),
             privacy=Privacy.PUBLIC,
@@ -264,14 +277,27 @@ def _detail_metrics(payload: WeatherPayload) -> tuple[Metric, ...]:
 
 
 def _hourly_items(
-    payload: WeatherPayload, settings: WeatherWidgetSettings, zone: ZoneInfo
+    payload: WeatherPayload,
+    settings: WeatherWidgetSettings,
+    zone: ZoneInfo,
+    *,
+    now: datetime | None = None,
 ) -> tuple[Item, ...]:
-    """The next configured hours. The payload already caps this at 24 hours."""
+    """The next configured hours. The payload already caps this at 24 hours.
+
+    An hour that is not today carries its weekday: a bare "09:00" under a table of dates
+    reads as if it belonged to the last of them.
+    """
     settings_hours = min(_HOUR_LIMIT, max(1, settings.show_hours))
+    today = now.astimezone(zone).date() if now is not None else None
+    url = _forecast_url(payload)
     items: list[Item] = []
     for point in payload.hourly[:settings_hours]:
         local = point.at.astimezone(zone)
         temperature = "—" if point.temperature_c is None else f"{point.temperature_c:.1f} °C"
+        clock = f"{local:%H:%M}"
+        if today is not None and local.date() != today:
+            clock = f"{local:%a %H:%M}"
         meta: list[tuple[str, str]] = []
         if settings.show_rain:
             chance = (
@@ -284,10 +310,11 @@ def _hourly_items(
         items.append(
             Item(
                 id=f"hour-{local:%Y%m%dT%H%M}",
-                title=f"{local:%H:%M} · {temperature}",
+                title=f"{clock} · {temperature}",
                 subtitle=weather_text(point.weather_code)
                 if point.weather_code is not None
                 else None,
+                url=url,
                 published_at=point.at,
                 meta=tuple(meta),
                 privacy=Privacy.PUBLIC,
@@ -326,7 +353,14 @@ def _daily_table(payload: WeatherPayload, settings: WeatherWidgetSettings) -> Ta
                 if point.precipitation_probability is None
                 else f"{point.precipitation_probability}%"
             )
-        rows.append(TableRow(id=point.date.isoformat(), cells=cells, privacy=Privacy.PUBLIC))
+        rows.append(
+            TableRow(
+                id=point.date.isoformat(),
+                cells=cells,
+                privacy=Privacy.PUBLIC,
+                url=_forecast_url(payload),
+            )
+        )
     return TableView(
         columns=tuple(columns),
         rows=tuple(rows),

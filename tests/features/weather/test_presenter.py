@@ -266,3 +266,59 @@ def test_feature_registration_matches_the_contract() -> None:
     assert widget.inputs[0].name == "primary"
     assert widget.inputs[0].accepts == frozenset({"weather.forecast"})
     assert WeatherWidgetSettings().show_hours == 4
+
+
+def test_forecast_rows_link_to_the_location_page(sample_payload, make_envelope) -> None:
+    """A weather row has no article, so it links to the location's public forecast.
+
+    "No link on this row" on every row of a forecast is not useful either; the coordinates
+    the source was configured with are enough to build a page for that place.
+    """
+    payload = sample_payload.model_copy(update={"latitude": 55.7033, "longitude": 21.1443})
+    view = present(
+        PresentInput(
+            settings=WeatherWidgetSettings(),
+            inputs={"primary": make_envelope(payload)},
+            context=ViewContext(now=NOW, mode=ViewMode.DETAIL, width=120, height=40),
+        )
+    )
+    expected = "https://www.yr.no/en/forecast/daily-table/55.7033,21.1443"
+    assert view.table is not None
+    assert all(row.url == expected for row in view.table.rows)
+    assert all(item.url == expected for item in view.items)
+
+    # No coordinates in the payload (an older cached one): no link rather than a wrong one.
+    without = present(
+        PresentInput(
+            settings=WeatherWidgetSettings(),
+            inputs={
+                "primary": make_envelope(
+                    sample_payload.model_copy(update={"latitude": None, "longitude": None})
+                )
+            },
+            context=ViewContext(now=NOW, mode=ViewMode.DETAIL, width=120, height=40),
+        )
+    )
+    assert without.table is not None
+    assert all(row.url is None for row in without.table.rows)
+
+
+def test_an_hour_that_is_not_today_carries_its_weekday(sample_payload, make_envelope) -> None:
+    """A bare "09:00" under a table of dates reads as if it belonged to the last date."""
+    from datetime import timedelta
+
+    hourly = tuple(
+        point.model_copy(update={"at": point.at + timedelta(hours=18)})
+        for point in sample_payload.hourly
+    )
+    payload = sample_payload.model_copy(update={"hourly": hourly})
+    view = present(
+        PresentInput(
+            settings=WeatherWidgetSettings(),
+            inputs={"primary": make_envelope(payload)},
+            context=ViewContext(now=NOW, mode=ViewMode.DETAIL, width=120, height=40),
+        )
+    )
+    titles = [item.title for item in view.items]
+    assert any(title.split(" · ")[0].count(" ") == 1 for title in titles), titles
+    assert any(":" in title for title in titles)

@@ -367,3 +367,45 @@ def test_a_status_is_a_state_not_a_paragraph() -> None:
     assert "WARNING" in rendered
     assert "timeout" not in rendered, rendered
     assert "doctor" not in rendered, rendered
+
+
+def test_hours_come_before_days_in_a_full_view() -> None:
+    """The hourly list is above the daily table, as it already was on the card.
+
+    Below it, a bare "09:00" read as though it belonged to the last date in the table, and
+    the reader had to work out which section the times were in.
+    """
+    from sideboard.core.contracts import (
+        Item,
+        Metric,
+        Privacy,
+        TableColumn,
+        TableRow,
+        TableView,
+        ViewModel,
+    )
+    from sideboard.ui.screens import render_view_body
+
+    view = ViewModel(
+        title="Weather",
+        metrics=(Metric(id="temp", label="Temp", value_text="13.3", unit="°C"),),
+        items=(
+            Item(
+                id="hour-1",
+                title="18:00 · 13.3 °C",
+                url="https://example.com/forecast",
+                privacy=Privacy.PUBLIC,
+            ),
+        ),
+        table=TableView(
+            columns=(
+                TableColumn(id="date", label="Date"),
+                TableColumn(id="min", label="Min °C", align="right"),
+            ),
+            rows=(TableRow(id="2026-10-14", cells={"date": "Wed 14 Oct", "min": "10°"}),),
+        ),
+    )
+    rendered = _rendered_text(render_view_body(view, width=100, privacy=False, selected_index=0))
+    hours = rendered.index("18:00")
+    days = rendered.index("Wed 14 Oct")
+    assert hours < days, rendered
