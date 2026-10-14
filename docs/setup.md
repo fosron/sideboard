@@ -180,10 +180,14 @@ A card is always laid out with a usable height:
 * the **Overview** fills the window: every configured slot, two per row, in slot order
   (pin two weather sources to compare them side by side), and narrowing merges the
   rotating queues rather than squeezing them;
-* a **detail tab** (Money, Watch, Life) sizes each card from what it actually contains,
-  so a table gets rows and a metrics card gets lines;
-* a **stack tab** (Systems) does the same and **scrolls** when the cards together need
-  more rows than the window has — `PgDn` or the wheel reaches the later cards;
+* a **detail tab** (Money) sizes each card from what it actually contains, so a table gets
+  rows and a metrics card gets lines;
+* a **grid tab** (Life) puts two cards per row and gives each row half the window: the two
+  weather cards share the top row and the uploads list takes the second one at full
+  height, so all three are on screen without scrolling;
+* a **stack tab** (Systems) sizes each card from its content and **scrolls** when they
+  together need more rows than the window has — `PgDn` or the wheel reaches the later
+  cards;
 * a **filterable tab** (Read) gives one row to the subfilter bar and the rest to the
   selected view.
 

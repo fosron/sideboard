@@ -52,3 +52,6 @@ class YouTubeWidgetSettings(BaseModel):
     show_channel: bool = True
     favorites_only: bool = False
     group_by_channel: bool = False
+    #: Channels take turns in the list. Without it, a favourite channel that uploads daily
+    #: fills the card on its own — the card says "YouTube" and shows one person.
+    spread_channels: bool = True

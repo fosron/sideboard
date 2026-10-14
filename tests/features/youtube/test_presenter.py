@@ -39,11 +39,12 @@ def _upload(
     label: str | None = "Alpha Synthetic Channel",
     score: float | None = None,
     events: int | None = None,
+    channel_id: str | None = None,
 ) -> Upload:
     published = NOW - timedelta(hours=hours_ago)
     return Upload(
         video_id=video_id,
-        channel_id=ALPHA,
+        channel_id=channel_id or ALPHA,
         channel_label=label,
         title=f"Video {video_id}",
         published=published,
@@ -244,3 +245,54 @@ def test_group_by_channel_sorts_by_channel_label() -> None:
     view = _present(YouTubeWidgetSettings(group_by_channel=True), payload)
     assert [item.id for item in view.items] == ["yt:vid-a1", "yt:vid-b1"]
     assert view.items[0].category == "Alpha Synthetic Channel"
+
+
+def test_channels_take_turns_so_one_channel_cannot_fill_the_card() -> None:
+    """A favourites-first ranking plus one busy channel produced eight rows of that channel.
+
+    The card says "YouTube"; it should not show one person's uploads when eleven other
+    channels have something new.
+    """
+    uploads = tuple(
+        _upload(
+            f"fav-{index}",
+            hours_ago=index,
+            favorite=True,
+            label="Busy Favourite",
+            channel_id="UCbusy",
+        )
+        for index in range(8)
+    ) + tuple(
+        _upload(
+            f"other-{index}", hours_ago=10 + index, label=f"Other {index}", channel_id=f"UC{index}"
+        )
+        for index in range(3)
+    )
+    view = _present(payload=_payload(list(uploads)), settings=YouTubeWidgetSettings(limit=6))
+    channels = [(item.subtitle or "").split(" · ")[0] for item in view.items]
+    assert len(set(channels)) >= 3, channels
+    assert channels[0] == "Busy Favourite", "the top-ranked upload still leads"
+    assert "Other 0" in channels[:3], channels
+
+
+def test_spreading_can_be_turned_off() -> None:
+    uploads = (
+        *tuple(
+            _upload(
+                f"fav-{index}",
+                hours_ago=index,
+                favorite=True,
+                label="Busy Favourite",
+                channel_id="UCbusy",
+            )
+            for index in range(4)
+        ),
+        _upload("other-0", hours_ago=20, label="Other", channel_id="UCother"),
+    )
+    stracled = _present(
+        payload=_payload(list(uploads)),
+        settings=YouTubeWidgetSettings(limit=3, spread_channels=False),
+    )
+    assert {(item.subtitle or "").split(" · ")[0] for item in stracled.items} == {"Busy Favourite"}
+    spread = _present(payload=_payload(list(uploads)), settings=YouTubeWidgetSettings(limit=3))
+    assert "Other" in {(item.subtitle or "").split(" · ")[0] for item in spread.items}

@@ -35,7 +35,7 @@ widget consumes owns no recurring task at all.
 | `news.digest` | `primary`: news.feeds | world | deterministic diversity digest | per-bucket list plus feed health |
 | `news.saved` | — (local state) | world | saved reading/video links | same list, longer |
 | `hackernews.list` | `primary`: hackernews.stories | software | ranked item list | up to 30 items |
-| `youtube.uploads` | `primary`: youtube.uploads | media | recent uploads with rank basis | per-channel problem table |
+| `youtube.uploads` | `primary`: youtube.uploads | media | recent uploads, one channel per turn | per-channel problem table |
 | `reddit.list` | `primary`: reddit.threads (optional) | software | threads, or link-only community links | grouped by community |
 | `portfolio.summary` | `positions`, `prices`?, `fx`?, `markets`? | finance | tracked value, priced count, weights | per-holding table |
 | `portfolio.holdings` | `positions`, `prices`?, `fx`?, `markets`? | finance | holdings table with basis columns | adds cost basis and reported values |
@@ -52,6 +52,11 @@ widget consumes owns no recurring task at all.
 | `local_snapshot.items` | `primary`: local_snapshot.file (optional) | infrastructure | producer items | longer item list |
 | `diagnostics.sources` | — (host-owned) | infrastructure | counts and short table | full source table and setup problems |
 | `diagnostics.host` | — (host-owned) | infrastructure | mode, config revision, paths | same with pending writes |
+
+The YouTube list takes one upload per channel per turn (`spread_channels`, on by default):
+with a favourites-first ranking and no watch history, one favourite channel that uploads
+daily otherwise filled the card on its own. Within a channel the ranking still decides the
+order, and `group_by_channel` turns the spread off by grouping instead.
 
 Footnotes, metric bases and payload notes are recorded by presenters for the record and
 are **not rendered**: the dashboard prints values, and a `StatusView` or a warning-severity

@@ -54,6 +54,8 @@ def present(data: PresentInput) -> ViewModel:
     uploads = payload.uploads
     if settings.favorites_only:
         uploads = tuple(upload for upload in uploads if upload.favorite)
+    if settings.spread_channels and not settings.group_by_channel:
+        uploads = _spread_across_channels(uploads)
     visible = uploads[: settings.limit]
     problems = tuple(
         report
@@ -194,6 +196,36 @@ def _problems_view(payload: YouTubePayload, problems: tuple[ChannelReport, ...])
     return ViewModel(table=table, footnote=_ranking_footnote(payload))
 
 
+def _spread_across_channels(uploads: tuple[Upload, ...]) -> tuple[Upload, ...]:
+    """Interleave channels: each takes a turn before any channel takes a second.
+
+    The ranking decides the order *within* a channel; this decides how many channels the
+    card shows. Without it, eight rows of the same favourite channel is what a favourites-
+    first ranking produces.
+    """
+    queues: dict[str, list[Upload]] = {}
+    order: list[str] = []
+    for upload in uploads:
+        key = upload.channel_id or upload.channel_label or ""
+        if key not in queues:
+            queues[key] = []
+            order.append(key)
+        queues[key].append(upload)
+    out: list[Upload] = []
+    index = 0
+    while True:
+        added = False
+        for key in order:
+            queue = queues[key]
+            if index < len(queue):
+                out.append(queue[index])
+                added = True
+        if not added:
+            break
+        index += 1
+    return tuple(out)
+
+
 def _item(upload: Upload, settings: YouTubeWidgetSettings, context: ViewContext) -> Item:
     item_id = f"yt:{upload.video_id}"
     state = context.item_states.get(item_id, ItemState())
@@ -216,7 +248,7 @@ def _item(upload: Upload, settings: YouTubeWidgetSettings, context: ViewContext)
 
 def _relative_age(moment: datetime | None, now: datetime) -> str:
     if moment is None:
-        return "date unknown"
+        return "undated"
     published = moment if moment.tzinfo is not None else moment.replace(tzinfo=UTC)
     reference = now if now.tzinfo is not None else now.replace(tzinfo=UTC)
     age = (reference - published).total_seconds()
