@@ -32,8 +32,14 @@ __all__ = [
 ]
 
 
-def render_view_body(view: ViewModel, *, width: int, privacy: bool) -> RenderableType:
-    """Detail-mode rendering of a whole standard view model."""
+def render_view_body(
+    view: ViewModel, *, width: int, privacy: bool, selected_index: int = 0
+) -> RenderableType:
+    """Detail-mode rendering of a whole standard view model.
+
+    ``selected_index`` marks the row the cursor is on, so the detail view can be walked
+    with the arrow keys and opened from there.
+    """
     sections: list[RenderableType] = []
     if view.title:
         sections.append(Text(single_line(view.title, width), style=VALUE))
@@ -46,11 +52,21 @@ def render_view_body(view: ViewModel, *, width: int, privacy: bool) -> Renderabl
     for series in view.series:
         sections.append(render_series(series, width=width))
     if view.table is not None and view.table.columns:
-        sections.append(render_table(view.table, width=width, privacy=privacy))
+        sections.append(
+            render_table(view.table, width=width, privacy=privacy, selected_index=selected_index)
+        )
         if view.table.footnote:
             sections.append(Text(single_line(view.table.footnote, width), style=DIM))
     if view.items:
-        sections.append(render_items(view.items, width=width, privacy=privacy, max_rows=200))
+        sections.append(
+            render_items(
+                view.items,
+                width=width,
+                privacy=privacy,
+                selected_index=selected_index,
+                max_rows=200,
+            )
+        )
     if view.footnote:
         sections.append(Text(single_line(view.footnote, width), style=DIM))
     if not sections:
@@ -65,6 +81,10 @@ class DetailScreen(ModalScreen[None]):
         Binding("escape", "dismiss_screen", "close"),
         Binding("o", "open_url", "open link"),
         Binding("s", "save", "save"),
+        Binding("up", "cursor_up", "up", show=False),
+        Binding("k", "cursor_up", "up", show=False),
+        Binding("down", "cursor_down", "down", show=False),
+        Binding("j", "cursor_down", "down", show=False),
     ]
 
     class SaveRequested(Message):
@@ -80,11 +100,13 @@ class DetailScreen(ModalScreen[None]):
         privacy: bool,
         url_provider: Callable[[], str | None],
         item_provider: Callable[[], str | None],
+        selected_index: int = 0,
     ) -> None:
         super().__init__()
         self.view_title = title
         self.view = view
         self.privacy = privacy
+        self.index = selected_index
         self._url_provider = url_provider
         self._item_provider = item_provider
 
@@ -96,21 +118,68 @@ class DetailScreen(ModalScreen[None]):
         yield wrapper
 
     def on_mount(self) -> None:
+        self._refresh_body()
+
+    def _refresh_body(self) -> None:
         width = max(40, self.size.width - 8)
         body = self.query_one("#sb-detail-body", Static)
-        body.update(render_view_body(self.view, width=width, privacy=self.privacy))
+        body.update(
+            render_view_body(
+                self.view, width=width, privacy=self.privacy, selected_index=self.index
+            ),
+            layout=False,
+        )
+
+    def _rows(self) -> int:
+        """Rows the cursor can reach: the table when there is one, otherwise the items."""
+        if self.view.table is not None and self.view.table.rows:
+            return len(self.view.table.rows)
+        return len(self.view.items)
+
+    def _selected_url(self) -> str | None:
+        table = self.view.table
+        if table is not None and table.rows and 0 <= self.index < len(table.rows):
+            return table.rows[self.index].url
+        if 0 <= self.index < len(self.view.items):
+            return self.view.items[self.index].url
+        return None
+
+    def _selected_id(self) -> str | None:
+        table = self.view.table
+        if table is not None and table.rows and 0 <= self.index < len(table.rows):
+            return table.rows[self.index].id
+        if 0 <= self.index < len(self.view.items):
+            return self.view.items[self.index].id
+        return None
+
+    def action_cursor_up(self) -> None:
+        self._move_cursor(-1)
+
+    def action_cursor_down(self) -> None:
+        self._move_cursor(1)
+
+    def _move_cursor(self, delta: int) -> None:
+        rows = self._rows()
+        if rows <= 0:
+            return
+        before = self.index
+        self.index = max(0, min(rows - 1, self.index + delta))
+        if self.index != before:
+            self._refresh_body()
 
     def action_dismiss_screen(self) -> None:
         self.dismiss()
 
     def action_open_url(self) -> None:
-        url = self._url_provider() or self.view.first_url()
+        # The row under the cursor wins; then the card's own selection, then the first
+        # link in the view. Opening a link is explicit: nothing is opened on arrival.
+        url = self._selected_url() or self._url_provider() or self.view.first_url()
         if url is not None:
             self.dismiss()
             self.app.open_validated_url(url)  # type: ignore[attr-defined]
 
     def action_save(self) -> None:
-        item_id = self._item_provider()
+        item_id = self._selected_id() or self._item_provider()
         if item_id:
             self.post_message(DetailScreen.SaveRequested(item_id))
 
@@ -135,7 +204,7 @@ class HelpScreen(ModalScreen[None]):
         ("s", "save / unsave the selected item"),
         ("r", "request a rate-limited refresh of the selected provider"),
         ("v", "privacy mode: hide amounts and private identifiers"),
-        ("Ctrl+D", "mouse / focus diagnostic (any key closes)"),
+        ("Arrows / Tab", "walk cards; left and right wrap, up and down follow the grid"),
         ("Esc", "close / back"),
         ("q", "quit"),
     )
@@ -147,6 +216,11 @@ class HelpScreen(ModalScreen[None]):
             lines.append(f"  {keys:<16}", style=BORDER_FOCUS)
             lines.append(f"{description}\n", style=DIM)
         lines.append("\nHover pauses only the hovered card. Data keeps collecting.\n", style=DIM)
+        lines.append(
+            "The pointer/focus diagnostic is a development tool: it is in the palette "
+            "(Ctrl+P) and in `sideboard doctor --mouse`.\n",
+            style=DIM,
+        )
         lines.append("q or Esc closes this help.\n", style=DIM)
         yield Static(lines, id="sb-help")
 

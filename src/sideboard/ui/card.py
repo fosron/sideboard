@@ -89,6 +89,10 @@ class CardShell(Widget, can_focus=True):
         Binding("k", "cursor_up", "up", show=False),
         Binding("down", "cursor_down", "down", show=False),
         Binding("j", "cursor_down", "down", show=False),
+        Binding("left", "card_left", "left", show=False),
+        Binding("h", "card_left", "left", show=False),
+        Binding("right", "card_right", "right", show=False),
+        Binding("l", "card_right", "right", show=False),
         Binding("enter", "activate", "open", show=False),
     ]
 
@@ -114,6 +118,13 @@ class CardShell(Widget, can_focus=True):
             self.card_key = card_key
             self.widget_id = widget_id
             self.index = index
+            super().__init__()
+
+    class FocusRequest(Message):
+        """The user asked to move on: this card has nothing left in that direction."""
+
+        def __init__(self, direction: str) -> None:
+            self.direction = direction
             super().__init__()
 
     def __init__(
@@ -314,17 +325,30 @@ class CardShell(Widget, can_focus=True):
     def action_cursor_down(self) -> None:
         self._move_cursor(1)
 
+    def action_card_left(self) -> None:
+        self.post_message(CardShell.FocusRequest("left"))
+
+    def action_card_right(self) -> None:
+        self.post_message(CardShell.FocusRequest("right"))
+
     def _move_cursor(self, delta: int) -> None:
+        """Walk the rows, then leave the card.
+
+        A card with a list uses up/down for the list; at either end the same key moves to
+        the card above or below, which is what makes the arrow keys usable for getting
+        around the dashboard instead of stopping at every card's edge.
+        """
         rows = self.row_count
-        if rows <= 0:
-            return
-        before = self.cursor_index
-        self.cursor_index = max(0, min(rows - 1, self.cursor_index + delta))
-        if before != self.cursor_index:
-            self.post_message(
-                CardShell.SelectionChanged(self.card_key, self.widget_id, self.cursor_index)
-            )
-            self.refresh(layout=True)
+        if rows > 1:
+            before = self.cursor_index
+            self.cursor_index = max(0, min(rows - 1, self.cursor_index + delta))
+            if before != self.cursor_index:
+                self.post_message(
+                    CardShell.SelectionChanged(self.card_key, self.widget_id, self.cursor_index)
+                )
+                self.refresh(layout=True)
+                return
+        self.post_message(CardShell.FocusRequest("down" if delta > 0 else "up"))
 
     def action_activate(self) -> None:
         self.post_message(CardShell.Activated(self.card_key, self.widget_id))

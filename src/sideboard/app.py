@@ -49,6 +49,7 @@ from .core.scheduler import Scheduler
 from .core.storage import CORE_MIGRATIONS, Database, ensure_private_dir
 from .features import build_feature_registry
 from .ui.card import CardShell, freshness_line
+from .ui.navigation import Box, neighbour
 from .ui.overview import LayoutMode, OverviewPane, SlotSpec, layout_mode, slot_specs
 from .ui.rotation import Candidate, HoldReason, RotationController
 from .ui.screens import (
@@ -244,10 +245,7 @@ class SideboardApp(App[None]):
         Binding("r", "refresh_source", "refresh"),
         Binding("v", "toggle_privacy", "privacy"),
         Binding("question_mark", "help", "help"),
-        Binding("ctrl+d", "mouse_diagnostic", "diagnostics"),
         Binding("ctrl+y", "reset_holds", "reset holds"),
-        Binding("tab", "focus_next_card", "next card", show=False),
-        Binding("shift+tab", "focus_previous_card", "previous card", show=False),
         Binding("q", "quit", "quit"),
     ] + [
         Binding(key, f"select_tab({index})", f"tab {index}", show=False)
@@ -733,8 +731,8 @@ class SideboardApp(App[None]):
             self._last_tabbar = tabbar
             self._update_static("#sb-tabbar", tabbar)
         footer = (
-            "Space pause · p pin · n next · Enter detail · o open · s save · r refresh · "
-            "v privacy · Ctrl+R reload · Ctrl+P palette · Ctrl+D mouse · ? help"
+            "Arrows walk cards · Enter detail · Space pause · p pin · o open · s save · "
+            "r refresh · v privacy · Ctrl+R reload · Ctrl+P palette · ? help"
         )
         if force or footer != self._last_footer:
             self._last_footer = footer
@@ -931,6 +929,7 @@ class SideboardApp(App[None]):
                 privacy=self.privacy,
                 url_provider=card.selected_url,
                 item_provider=card.selected_id,
+                selected_index=card.cursor_index,
             ),
             callback=self._after_modal,
         )
@@ -1323,19 +1322,74 @@ class SideboardApp(App[None]):
         focused = self.focused
         return focused if isinstance(focused, CardShell) else None
 
-    def action_focus_next_card(self) -> None:
-        self._user_navigation = True
-        try:
-            self.screen.focus_next()
-        finally:
-            self._user_navigation = False
+    def on_card_shell_focus_request(self, event: CardShell.FocusRequest) -> None:
+        """Arrow keys at a card's edge: hand the movement to the neighbouring card."""
+        self._focus_neighbour(event.direction)
 
-    def action_focus_previous_card(self) -> None:
+    def _active_cards(self) -> list[CardShell]:
+        """Cards the user can reach right now: the visible tab's, in layout order."""
+        if self._active_tab is None:
+            return []
+        return self._cards_for_tab(self._active_tab)
+
+    def _focus_neighbour(self, direction: str) -> None:
+        cards = [card for card in self._active_cards() if card.display and card.size.height > 0]
+        if not cards:
+            return
+        current = self.focused_card()
+        if current is None or current not in cards:
+            target = cards[0]
+        else:
+            key = neighbour(
+                [Box(card.card_key, *card.region) for card in cards],
+                current.card_key,
+                direction,
+            )
+            target = next((card for card in cards if card.card_key == key), None)
+        if target is None or target is current:
+            return
+        self._focus_card(target)
+
+    def _focus_card(self, target: CardShell) -> None:
         self._user_navigation = True
         try:
-            self.screen.focus_previous()
+            target.focus()
+            with contextlib.suppress(Exception):
+                # A card in a scrolling stack must be brought into view, or focus moves
+                # somewhere the user cannot see.
+                target.scroll_visible()
         finally:
             self._user_navigation = False
+        self._apply_interaction_hold(target.card_key)
+
+    def _cycle_card(self, step: int) -> bool:
+        """Walk the cards of the visible tab and wrap. False when not on a card.
+
+        Textual's own focus chain also visits filter bars and the tab strip, which makes
+        "next card" unpredictable on a tab with several cards. The cards are what the user
+        is walking through — but a filter bar that already has focus keeps Tab, or it could
+        not be used at all.
+        """
+        if not isinstance(self.focused, CardShell):
+            return False
+        cards = [card for card in self._active_cards() if card.display and card.size.height > 0]
+        if not cards:
+            return False
+        current = self.focused_card()
+        index = cards.index(current) if current in cards else -step
+        self._focus_card(cards[(index + step) % len(cards)])
+        return True
+
+    def action_focus_next(self) -> None:
+        """Tab. The Screen binds this key to ``app.focus_next``; a binding of our own on
+        "tab" never ran, because the screen's binding is checked first."""
+        if not self._cycle_card(1):
+            super().action_focus_next()
+
+    def action_focus_previous(self) -> None:
+        """Shift+Tab, the same walk backwards."""
+        if not self._cycle_card(-1):
+            super().action_focus_previous()
 
     async def _load_item_state(self) -> None:
         store = self.runtime.items

@@ -1,8 +1,9 @@
 """Modal screens must be dismissible and cheap to update.
 
-The diagnostic screen is reachable with Ctrl+D, which is also a terminal's end-of-input
-key, so it can be opened by a stray byte rather than a deliberate press. A modal that
-swallows every key and offers no visible way out looks exactly like a broken application.
+The diagnostic screen is a development tool: it is opened from the command palette or by
+`sideboard doctor --mouse`, and it can also be opened by a stray Ctrl+D byte if a terminal
+sends one. A modal that swallows every key and offers no visible way out looks exactly
+like a broken application.
 """
 
 from __future__ import annotations

@@ -103,8 +103,9 @@ read, capped at 1 MiB.
 | `1`–`9` | select the first nine visible tabs, in configured order |
 | `Ctrl+P` | palette: any tab, any widget, and the application actions |
 | `Ctrl+R` | validate and reload configuration; an invalid update keeps the running one |
-| `Tab` / `Shift+Tab` | move focus between cards |
-| `↑` / `↓` | move the selection inside the focused card |
+| `Tab` / `Shift+Tab` | next / previous card of the visible tab, wrapping |
+| `←` / `→` (`h` / `l`) | move to the card on the left / right, wrapping at the ends |
+| `↑` / `↓` (`k` / `j`) | move the selection inside the focused card; at the first or last row it moves to the card above or below |
 | `PgUp` / `PgDn`, `Home` / `End`, wheel | scroll a tab whose cards are taller than the window |
 | `Space` | toggle global visual pause (collection is independent) |
 | `p` | pin / unpin the focused Overview card |
@@ -114,7 +115,6 @@ read, capped at 1 MiB.
 | `s` | save / unsave the selected item |
 | `r` | request a rate-limited refresh of the focused card's provider |
 | `v` | privacy mode: mask amounts, process names, container and project names |
-| `Ctrl+D` | mouse/focus diagnostic and reset holds (any key closes it) |
 | `Ctrl+Y` | release every hold |
 | `?` | help · `Esc` close/back · `q` quit |
 
@@ -133,10 +133,11 @@ read, capped at 1 MiB.
   releasing one cannot clear another.
 
 If hover or mouse selection does not work, the terminal is probably not reporting
-motion. Press `Ctrl+D`: the diagnostic screen counts `MouseMove`, `Enter`, `Leave`,
-click and blur events and says when motion has never been seen. `Esc`, `q`, or any other
-key except `r` closes it again, so a terminal that sends an unexpected byte (Ctrl+D is
-also end-of-input) cannot leave you stuck on it. `Ctrl+Y` releases every hold, and
+motion. The pointer/focus diagnostic is a development tool rather than a dashboard
+control: open it from the palette (`Ctrl+P`, then "mouse") or with
+`uv run sideboard doctor --mouse`. It counts `MouseMove`, `Enter`, `Leave`, click and
+blur events and says when motion has never been seen; `Esc`, `q`, or any other key
+except `r` closes it again. `Ctrl+Y` releases every hold, and
 `uv run sideboard --no-mouse` turns hover off entirely. Selection, pausing and
 navigation all work from the keyboard, so nothing is lost.
 
@@ -219,5 +220,5 @@ Recorded on the development Mac (macOS, Python 3.14, `TERM_PROGRAM=muxy`):
   are asserted instead by headless Pilot tests in `tests/ui/`
 
 Not verified here: hover and mouse selection in a real terminal. Headless tests passing
-does not prove that the terminal reports motion — that is exactly what `Ctrl+D` exists
-to check, and the decision to trust it is yours.
+does not prove that the terminal reports motion — that is exactly what the diagnostic
+screen exists to check, and the decision to trust it is yours.
