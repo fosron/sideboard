@@ -27,6 +27,7 @@ from ..styles import BORDER, BORDER_FOCUS, DIM, INFO, ITEM, READ, VALUE, WARN
 from ..text import SEVERITY_STYLE, control_free, single_line
 
 __all__ = [
+    "render_item_row",
     "render_items",
     "render_metrics",
     "render_series",
@@ -108,6 +109,49 @@ def render_status(status: StatusView, *, width: int) -> RenderableType:
     return Group(*parts)
 
 
+def render_item_row(raw: object, *, width: int, privacy: bool, selected: bool = False) -> Text:
+    """One item row: cursor, saved marker, title, badge and stats — never two lines.
+
+    Extracted so the detail view can render rows as individual widgets: a click then lands
+    on a row rather than on a block of text, and the same code decides what a row looks
+    like in both places.
+    """
+    from ...core.contracts import Item
+
+    assert isinstance(raw, Item)
+    line = Text()
+    if selected:
+        line.append("› ", style=BORDER_FOCUS)
+    else:
+        line.append("  ")
+    line.append("◆ " if raw.saved else "  ", style=WARN)
+    hide = privacy and raw.privacy is Privacy.PRIVATE
+    style = READ if raw.read else ITEM
+    badge = f" [{single_line(raw.badge, 20)}]" if raw.badge else ""
+    meta_text = ""
+    if raw.meta and width >= 60:
+        meta_parts = []
+        for key, value in raw.meta[:3]:
+            text = "••••" if hide else single_line(value, 18)
+            meta_parts.append(f"{single_line(key, 8)} {text}")
+        meta_text = " · ".join(meta_parts)
+    # One item, one row. The title is truncated to what the badge and the stats do not
+    # need, and the stats are capped at half the row: a headline plus a long
+    # "pts 220 · c 77 · age 3h" used to overflow and wrap.
+    room = max(12, width - 4)  # cursor and saved marker
+    if meta_text:
+        meta_text = single_line(meta_text, max(8, room // 2))
+        room -= len(meta_text) + 2
+    title_room = max(12, room - len(badge))
+    line.append(single_line(raw.title, title_room), style=style)
+    if badge:
+        line.append(badge, style=DIM)
+    if meta_text:
+        line.append("  ")
+        line.append(meta_text, style=DIM)
+    return line
+
+
 def render_items(
     items: Sequence[object],
     *,
@@ -126,42 +170,9 @@ def render_items(
     limit = len(items) if max_rows is None else min(len(items), max_rows)
     for index, raw in enumerate(items[:limit]):
         assert isinstance(raw, Item)
-        line = Text()
-        selected = index == selected_index
-        if selected:
-            line.append("› ", style=BORDER_FOCUS)
-        else:
-            line.append("  ")
-        line.append("◆ " if raw.saved else "  ", style=WARN)
-        hide = privacy and raw.privacy is Privacy.PRIVATE
-        style = READ if raw.read else ITEM
-        badge = f" [{single_line(raw.badge, 20)}]" if raw.badge else ""
-        meta_text = ""
-        if raw.meta and width >= 60:
-            meta_parts = []
-            for key, value in raw.meta[:3]:
-                text = "••••" if hide else single_line(value, 18)
-                meta_parts.append(f"{single_line(key, 8)} {text}")
-            meta_text = " · ".join(meta_parts)
-        # One item, one row. The title is truncated to what the badge and the stats do not
-        # need, and the stats are capped at a third of the row: a headline plus a long
-        # "pts 220 · c 77 · age 3h" used to overflow and wrap, so half the rows in a list
-        # card were a wrapped fragment with a stray "age 2h" on the line below.
-        room = max(12, width - 4)  # cursor and saved marker
-        if meta_text:
-            # Half the row at most for the stats: enough for "pts 225 · c 81 · age 3h" on a
-            # half-width card, while the headline keeps the rest. A third cut the age off
-            # the end of the stats, which is the one part a reader scans for.
-            meta_text = single_line(meta_text, max(8, room // 2))
-            room -= len(meta_text) + 2
-        title_room = max(12, room - len(badge))
-        line.append(single_line(raw.title, title_room), style=style)
-        if badge:
-            line.append(badge, style=DIM)
-        if meta_text:
-            line.append("  ")
-            line.append(meta_text, style=DIM)
+        line = render_item_row(raw, width=width, privacy=privacy, selected=index == selected_index)
         rows.append(line)
+        hide = privacy and raw.privacy is Privacy.PRIVATE
         if raw.subtitle and width >= 60:
             sub = Text("     ")
             sub.append("…" if hide else single_line(raw.subtitle, max(20, width - 8)), style=DIM)

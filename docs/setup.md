@@ -118,6 +118,7 @@ reference on screen. The tabs are the first row, so the cards get the rest of th
 | `p` | pin / unpin the focused Overview card |
 | `n` | advance the focused rotating card, even while paused |
 | `Enter` / click | open the detail view |
+| `Enter` / click inside the detail view | open the link on the selected row; a click on the dimmed margin closes the view |
 | `o` | open the selected validated HTTP(S) link in your browser |
 | `s` | save / unsave the selected item |
 | `r` | request a rate-limited refresh of the focused card's provider |
@@ -134,6 +135,12 @@ reference on screen. The tabs are the first row, so the cards get the rest of th
 * **Keyboard navigation holds the focused card for 15 seconds** (configurable).
   Programmatic initial focus does not start a hold.
 * **A detail modal pauses all visible rotation** until it is closed.
+* **A modal closes when you click outside it.** The detail, help, palette and theme
+  pickers are centred with a margin all round; clicking that margin dismisses them, and a
+  click inside does not (clicks bubble from children, so the test is against the content
+  region rather than the widget that received the event).
+* **Links open from the detail view.** `Enter` or a click opens the link on the row under
+  the cursor; a row with no link says so instead of opening another row's.
 * **Losing terminal focus clears stale pointer holds only.** It never pauses rotation
   globally; the app keeps rotating while you work in another window.
 * **Holds are tracked per reason** (`hover`, `interaction`, `modal`, `manual`), so

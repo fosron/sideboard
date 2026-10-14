@@ -20,21 +20,36 @@ from textual.widgets import Input, OptionList, Static
 from textual.widgets.option_list import Option
 
 from ..core.contracts import ViewModel
-from .renderers import render_items, render_metrics, render_series, render_status, render_table
+from .renderers import (
+    render_item_row,
+    render_items,
+    render_metrics,
+    render_series,
+    render_status,
+    render_table,
+)
 from .styles import BORDER_FOCUS, DIM, VALUE
 from .text import single_line
 
 __all__ = [
     "CommandPaletteScreen",
+    "DetailRow",
     "DetailScreen",
+    "DismissOnOutsideClick",
     "HelpScreen",
     "MouseDiagnosticScreen",
+    "RowActivated",
     "ThemePickerScreen",
 ]
 
 
 def render_view_body(
-    view: ViewModel, *, width: int, privacy: bool, selected_index: int = 0
+    view: ViewModel,
+    *,
+    width: int,
+    privacy: bool,
+    selected_index: int = 0,
+    items_as_rows: bool = False,
 ) -> RenderableType:
     """Detail-mode rendering of a whole standard view model.
 
@@ -58,7 +73,9 @@ def render_view_body(
         )
         if view.table.footnote:
             sections.append(Text(single_line(view.table.footnote, width), style=DIM))
-    if view.items:
+    if view.items and not items_as_rows:
+        # The modal renders each item as its own widget so a click can land on it; every
+        # other caller gets the whole list as one renderable.
         sections.append(
             render_items(
                 view.items,
@@ -75,11 +92,63 @@ def render_view_body(
     return Group(*sections)
 
 
-class DetailScreen(ModalScreen[None]):
+class RowActivated(Message):
+    """A row inside a modal was clicked. The modal decides what that means."""
+
+    def __init__(self, index: int) -> None:
+        self.index = index
+        super().__init__()
+
+
+class DismissOnOutsideClick:
+    """Clicking the dimmed area around a modal closes it.
+
+    The click has to be tested against the content region rather than the widget that
+    received it: clicks bubble up from children, so a click on a row inside the modal also
+    reaches the screen and would otherwise close it.
+    """
+
+    #: Selectors for the widgets that count as "inside" the modal.
+    content_selectors: tuple[str, ...] = ()
+
+    def on_click(self, event: Click) -> None:
+        if not self.content_selectors:
+            return
+        x = event.screen_x if event.screen_x is not None else event.x
+        y = event.screen_y if event.screen_y is not None else event.y
+        for selector in self.content_selectors:
+            with contextlib.suppress(Exception):
+                widget = self.query_one(selector)  # type: ignore[attr-defined]
+                if widget.region.contains(x, y):
+                    return
+        self.dismiss()  # type: ignore[attr-defined]
+
+
+class DetailRow(Static):
+    """One clickable row of a detail view.
+
+    A row is a widget rather than a line of a single renderable so a click lands on it:
+    a block of text cannot tell which row was hit.
+    """
+
+    can_focus = False
+
+    def __init__(self, index: int, text: Text) -> None:
+        super().__init__(text, id=f"sb-detail-row-{index}")
+        self.index = index
+
+    def on_click(self) -> None:
+        self.post_message(RowActivated(self.index))
+
+
+class DetailScreen(DismissOnOutsideClick, ModalScreen[None]):
     """Stable detail view for one card."""
+
+    content_selectors = ("#sb-detail",)
 
     BINDINGS = [
         Binding("escape", "dismiss_screen", "close"),
+        Binding("enter", "open_url", "open link", show=False),
         Binding("o", "open_url", "open link"),
         Binding("s", "save", "save"),
         Binding("up", "cursor_up", "up", show=False),
@@ -114,18 +183,30 @@ class DetailScreen(ModalScreen[None]):
         self._item_provider = item_provider
 
     def compose(self) -> object:
-        body = Static(id="sb-detail-body")
-        wrapper = VerticalScroll(body, id="sb-detail")
+        wrapper = VerticalScroll(id="sb-detail")
         wrapper.border_title = single_line(self.view_title, 60)
         wrapper.border_subtitle = single_line(self.view.footnote or "", 60) or None
         yield wrapper
 
     def on_mount(self) -> None:
+        wrapper = self.query_one("#sb-detail", VerticalScroll)
+        wrapper.mount(Static(id="sb-detail-head"))
+        for index in range(len(self.view.items)):
+            wrapper.mount(DetailRow(index, Text("")))
+        wrapper.mount(Static(id="sb-detail-foot"))
         self._refresh_body()
 
+    def _row_widgets(self) -> list[DetailRow]:
+        return list(self.query(DetailRow))
+
     def _refresh_body(self) -> None:
+        """Head, rows and foot, with the cursor row marked.
+
+        Only the rows whose selection changed are rewritten: a detail view can hold
+        hundreds of rows and this runs on every arrow press.
+        """
         width = max(40, self.size.width - 8)
-        body = self.query_one("#sb-detail-body", Static)
+        head = self.query_one("#sb-detail-head", Static)
         sections: list[RenderableType] = []
         if self.provenance:
             # The card shows one timestamp; where it came from, when it was fetched and
@@ -133,10 +214,34 @@ class DetailScreen(ModalScreen[None]):
             sections.append(Text(single_line(self.provenance, width), style=DIM))
         sections.append(
             render_view_body(
-                self.view, width=width, privacy=self.privacy, selected_index=self.index
+                self.view,
+                width=width,
+                privacy=self.privacy,
+                selected_index=self.index,
+                items_as_rows=True,
             )
         )
-        body.update(Group(*sections), layout=False)
+        head.update(Group(*sections), layout=False)
+        rows = self._row_widgets()
+        for row in rows:
+            if row.index >= len(self.view.items):
+                continue
+            row.update(
+                render_item_row(
+                    self.view.items[row.index],
+                    width=width,
+                    privacy=self.privacy,
+                    selected=row.index == self.index,
+                ),
+                layout=False,
+            )
+        foot = self.query_one("#sb-detail-foot", Static)
+        foot.update(
+            Text(single_line(self.view.footnote or "", width), style=DIM)
+            if self.view.footnote
+            else Text(""),
+            layout=False,
+        )
 
     def _rows(self) -> int:
         """Rows the cursor can reach: the table when there is one, otherwise the items."""
@@ -175,13 +280,31 @@ class DetailScreen(ModalScreen[None]):
         if self.index != before:
             self._refresh_body()
 
+    def on_row_activated(self, event: RowActivated) -> None:
+        """A clicked row is the selected row, and a row with a link opens it."""
+        rows = self._rows()
+        if rows <= 0:
+            return
+        before = self.index
+        self.index = max(0, min(rows - 1, event.index))
+        if self.index != before:
+            self._refresh_body()
+        self.action_open_url()
+
     def action_dismiss_screen(self) -> None:
         self.dismiss()
 
     def action_open_url(self) -> None:
-        # The row under the cursor wins; then the card's own selection, then the first
-        # link in the view. Opening a link is explicit: nothing is opened on arrival.
-        url = self._selected_url() or self._url_provider() or self.view.first_url()
+        # The row under the cursor decides. If it has no link, say so rather than opening
+        # a different article's: a view can hold many links and the wrong one is worse than
+        # none. Only a view with no rows at all falls back to its first link.
+        if self._rows() > 0:
+            url = self._selected_url()
+            if url is None:
+                self.notify("No link on this row")  # type: ignore[attr-defined]
+                return
+        else:
+            url = self._url_provider() or self.view.first_url()
         if url is not None:
             self.dismiss()
             self.app.open_validated_url(url)  # type: ignore[attr-defined]
@@ -192,7 +315,9 @@ class DetailScreen(ModalScreen[None]):
             self.post_message(DetailScreen.SaveRequested(item_id))
 
 
-class HelpScreen(ModalScreen[None]):
+class HelpScreen(DismissOnOutsideClick, ModalScreen[None]):
+    content_selectors = ("#sb-help",)
+
     BINDINGS = [
         Binding("escape", "dismiss_screen", "close"),
         Binding("?", "dismiss_screen", "close"),
@@ -206,7 +331,11 @@ class HelpScreen(ModalScreen[None]):
             "inside a card the arrows move its rows first",
         ),
         ("Tab / Shift+Tab", "next / previous card of the visible tab"),
-        ("Enter / click", "open the detail view (arrows walk it, Esc closes it)"),
+        (
+            "Enter / click",
+            "open the detail view; inside it, Enter or a click on a row opens that "
+            "row's link, and a click outside closes it",
+        ),
         ("Space", "toggle global visual pause (collection continues)"),
         ("p", "pin / unpin the focused overview card"),
         ("n", "advance the focused rotating card, even while paused"),
@@ -247,8 +376,10 @@ class PaletteCommand(Message):
         super().__init__()
 
 
-class CommandPaletteScreen(ModalScreen[None]):
+class CommandPaletteScreen(DismissOnOutsideClick, ModalScreen[None]):
     """Ctrl+P palette: switch tabs, focus widgets, run actions."""
+
+    content_selectors = ("#sb-help", "#sb-palette-input")
 
     BINDINGS = [Binding("escape", "dismiss_screen", "close")]
 
@@ -301,12 +432,14 @@ class CommandPaletteScreen(ModalScreen[None]):
         self.dismiss()
 
 
-class ThemePickerScreen(ModalScreen[None]):
+class ThemePickerScreen(DismissOnOutsideClick, ModalScreen[None]):
     """Ctrl+T: pick a palette.
 
     Choosing one applies it and writes ``app.theme`` into the configuration, editing that
     single line so the comments around it survive.
     """
+
+    content_selectors = ("#sb-help",)
 
     BINDINGS = [Binding("escape", "dismiss_screen", "close")]
 

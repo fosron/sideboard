@@ -123,13 +123,19 @@ def build_digest(
     return tuple(chosen[:digest_size])
 
 
-def _item(article: Article, *, badge: bool = True, excerpt: bool = False) -> Item:
+def _item(
+    article: Article, *, badge: bool = True, excerpt: bool = False, source: bool = False
+) -> Item:
     """One digest row.
 
     The badge already names the bucket, so there is no "cat <bucket>" meta line repeating
-    it, and the excerpt is shown only where there is room for it: a compact card lists
-    headlines to pick from, and the article itself is one key press away.
+    it. The excerpt is shown only where there is room for it, and the *source* only where
+    the reader is deciding whether to open the article: a digest card needs the headline,
+    the full view needs to say who published it.
     """
+    meta: list[tuple[str, str]] = []
+    if source:
+        meta.append(("source", article.source_label or article.source_id))
     return Item(
         id=f"news:{article.id}",
         title=article.title,
@@ -137,7 +143,7 @@ def _item(article: Article, *, badge: bool = True, excerpt: bool = False) -> Ite
         url=article.url,
         category=article.category,
         published_at=article.published,
-        meta=(),
+        meta=tuple(meta),
         privacy=Privacy.PUBLIC,
         source_id=article.source_id,
         badge=BUCKET_LABELS.get(article.category) if badge else None,
@@ -232,7 +238,7 @@ def _detail_view(
     for bucket in buckets:
         for article in payload.articles:
             if article.category == bucket and _fresh(article, context.now, settings.max_age_hours):
-                items.append(_item(article, badge=False, excerpt=True))
+                items.append(_item(article, badge=False, excerpt=True, source=True))
     metrics = [
         Metric(
             id="articles", label="articles", value_text=str(len(payload.articles)), basis="cached"

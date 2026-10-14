@@ -200,6 +200,12 @@ ModalScreen {
     background: $background 60%;
 }
 
+/* Modals are centred with a margin all round: the dimmed edge is what the user clicks to
+   close them, so it has to exist on every side. */
+ModalScreen {
+    align: center middle;
+}
+
 #sb-detail {
     border: round $sb-border-focus;
     background: $surface;
