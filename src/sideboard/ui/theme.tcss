@@ -86,26 +86,32 @@ CardShell {
     width: 1fr;
 }
 
-/* The card the keyboard is on: the only card with a bright border and a lifted
-   background. Pinned cards are marked by the diamond in their title, not by a colour that
-   also means "the pointer is over this" or "the keyboard is here". */
-CardShell:focus {
-    border: round $sb-focus;
-    background: $sb-focus-bg;
-}
-
 /* Held: the pointer is over it, or it was just interacted with. Deliberately quieter
    than focus so the two can never be confused. */
 CardShell.sb-held {
     border: round $sb-border-held;
 }
 
+/* Pinned is marked by the diamond in the title, not by a border colour that also means
+   "the pointer is over this" or "the keyboard is here". */
+CardShell.sb-pinned {
+    border: round $sb-border;
+}
+
 CardShell.sb-selected {
     border: heavy $sb-border-focus;
 }
 
-CardShell.sb-pinned {
-    border: round $sb-border;
+/* The card the keyboard is on: the only card with a bright border and a lifted
+   background. Declared last, and repeated for the state classes, because a class rule of
+   equal specificity that comes later wins — which is how a focused pinned card kept the
+   plain border while its background changed, and why focus was invisible. */
+CardShell:focus,
+CardShell.sb-held:focus,
+CardShell.sb-pinned:focus,
+CardShell.sb-selected:focus {
+    border: round $sb-focus;
+    background: $sb-focus-bg;
 }
 
 CardShell.sb-minimal {
