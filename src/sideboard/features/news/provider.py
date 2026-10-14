@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import hashlib
+import html
 import logging
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urlsplit, urlunsplit
@@ -40,7 +41,10 @@ TRACKING_PREFIXES = ("utm_", "fbclid", "gclid", "mc_cid", "mc_eid", "ref_src")
 
 
 def _clean(value: object, limit: int = 400) -> str:
-    text = " ".join(str(value or "").split())
+    # Feeds encode quotes and dashes as entities. They are text, not markup, so they are
+    # decoded after tags are removed: an undecoded "&#x27;" reached the screen as
+    # "Musk&#x27;s SpaceX".
+    text = " ".join(html.unescape(str(value or "")).split())
     if len(text) > limit:
         text = text[: limit - 1].rstrip() + "…"
     return text

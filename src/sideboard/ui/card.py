@@ -45,6 +45,10 @@ def freshness_line(
     forced a repaint of every rotating card every second, and this line is the only part
     of a card that changed on a timer. Rotation progress is visible from the card
     changing, and ``n`` advances it on demand.
+
+    Missing source dates and partial coverage are left to the detail view, which has room
+    to say what they mean. On a compact card, "no source date" and "partial" read as
+    unexplained warnings next to a number that is usually complete.
     """
     parts: list[str] = []
     if demo:
@@ -60,13 +64,9 @@ def freshness_line(
         return " · ".join(parts)
     if envelope.as_of is not None:
         parts.append(f"as of {_local(envelope.as_of, timezone, now)}")
-    elif envelope.fetched_at is not None:
-        parts.append("no source date")
     if envelope.fetched_at is not None:
         parts.append(f"updated {_local(envelope.fetched_at, timezone, now)}")
     parts.append(str(envelope.freshness))
-    if envelope.is_partial:
-        parts.append("partial")
     if envelope.connectivity is not Connectivity.OK and envelope.has_payload:
         parts.append(str(envelope.connectivity))
     return " · ".join(parts)

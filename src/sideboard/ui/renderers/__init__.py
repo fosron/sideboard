@@ -135,11 +135,14 @@ def render_items(
         line.append("◆ " if raw.saved else "  ", style=WARN)
         hide = privacy and raw.privacy is Privacy.PRIVATE
         style = READ if raw.read else ITEM
-        title_room = max(12, width - 6)
+        badge = f" [{single_line(raw.badge, 20)}]" if raw.badge else ""
+        # The badge is part of the row, not a row of its own: truncating the title to the
+        # full width pushed the badge onto a second line, which read as a stray label
+        # under a headline that had already been cut off.
+        title_room = max(12, width - 6 - len(badge))
         line.append(single_line(raw.title, title_room), style=style)
-        if raw.badge:
-            line.append(" ")
-            line.append(f"[{single_line(raw.badge, 20)}]", style=DIM)
+        if badge:
+            line.append(badge, style=DIM)
         if raw.meta and width >= 60:
             meta_parts = []
             for key, value in raw.meta[:3]:

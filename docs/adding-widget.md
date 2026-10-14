@@ -89,7 +89,12 @@ that feature. It is pure:
 * it must not fetch, query a database, start a process or read the clock except through
   `view_context.now`;
 * a missing input produces a `ViewModel` with an honest `StatusView`. `ViewMode.DETAIL`
-  is requested through `view_context.mode`;
+  is requested through `view_context.mode`: the **Overview** presents `COMPACT` (half a
+  window, so a few short columns and no footnotes) while a **tab card** and the `Enter`
+  detail view present `DETAIL` (a whole pane that scrolls, so the full table, the
+  excerpts and the notes belong there). `view_context.width` is the width the card will
+  actually be drawn at, so a presenter can choose a short label that fits instead of
+  letting the renderer cut it off;
 * use stable IDs for metrics, items and rows; state money arithmetic in the feature, not
   in a generic string formatter.
 

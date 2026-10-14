@@ -252,15 +252,40 @@ def digest_view(payload: NewsPayload | None, settings: NewsWidgetSettings | None
 
 
 def test_digest_view_reports_empty_buckets_instead_of_padding() -> None:
+    """The card lists headlines; the detail view names the buckets with nothing fresh.
+
+    A compact card that footnotes "unavailable buckets: money, AI, h/w, infra" beside six
+    readable headlines is a warning about feeds the reader is not looking at. The same
+    fact is stated where it can be acted on: the detail view, next to the failing feeds.
+    """
+    from sideboard.core.contracts import Connectivity, PresentInput, SourceEnvelope
+
     payload = NewsPayload(
         articles=(article(1, category="world"),),
         reports=(FeedReport(feed_id="s1", label="s1"),),
         as_of=NOW,
         precision=Precision.INSTANT,
     )
-    view = digest_view(payload)
-    assert "unavailable buckets" in (view.footnote or "")
-    assert "local" in (view.footnote or "")
+    compact = digest_view(payload)
+    assert compact.footnote is None
+    detail = present_news(
+        PresentInput(
+            settings=NewsWidgetSettings(),
+            inputs={
+                "primary": SourceEnvelope(
+                    source_id="news",
+                    payload_schema="news.feeds",
+                    payload_schema_version=1,
+                    payload=payload,
+                    connectivity=Connectivity.OK,
+                    as_of=NOW,
+                )
+            },
+            context=ViewContext(now=NOW, mode=ViewMode.DETAIL, width=120, height=40),
+        )
+    )
+    assert "no article for" in (detail.footnote or "")
+    assert "local" in (detail.footnote or "")
 
 
 def test_digest_view_with_nothing_fresh_says_so() -> None:
@@ -279,6 +304,20 @@ def test_digest_view_without_a_payload_is_a_status() -> None:
     view = digest_view(None)
     assert view.status is not None
     assert view.items == ()
+
+
+def test_headline_entities_are_decoded() -> None:
+    """Feeds encode quotes as entities; they are text, not markup.
+
+    "Musk&#x27;s SpaceX" reached the screen literally, because tags were stripped and the
+    remaining entities were never decoded.
+    """
+    from sideboard.features.news.provider import _clean
+
+    assert _clean("Ukraine says Musk&#x27;s SpaceX limits Kyiv&#x27;s Starlink access") == (
+        "Ukraine says Musk's SpaceX limits Kyiv's Starlink access"
+    )
+    assert _clean("M&amp;A &amp;amp; more") == "M&A &amp; more"
 
 
 def test_detail_view_lists_articles_and_failing_feeds() -> None:

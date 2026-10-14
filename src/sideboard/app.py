@@ -547,7 +547,16 @@ class SideboardApp(App[None]):
             width=card.size.width or 40,
             height=card.size.height or 12,
         )
-        title = instance.title or instance.spec.type_id.split(".", 1)[-1].replace("_", " ").title()
+        # The card title must say what the card is. The type id gives every widget of a
+        # family the same name ("Summary" for the portfolio, the weather and the Mac), and
+        # two weather cards then look identical while showing two different cities. A
+        # configured title wins; otherwise the presenter's own title does, because it
+        # already carries the distinction ("Portfolio", "Torrevieja", "Mac").
+        title = (
+            instance.title
+            or (view.title if view is not None else "")
+            or instance.spec.type_id.split(".", 1)[-1].replace("_", " ").title()
+        )
         freshness = freshness_line(
             envelope,
             now=self.runtime.clock.now(),
@@ -647,7 +656,10 @@ class SideboardApp(App[None]):
             for widget_id in pane.widget_ids:
                 card = pane.card(widget_id)
                 if card is not None:
-                    self._present_card(card, widget_id, mode=ViewMode.COMPACT)
+                    # A tab card is the full card: it owns a whole pane and scrolls. The
+                    # Overview's half-width slots are the ones that get the compact view,
+                    # which is why the two are different modes rather than one card size.
+                    self._present_card(card, widget_id, mode=ViewMode.DETAIL)
 
     async def _rebuild_filter_pane(self, tab_id: str) -> None:
         pane = self._detail_panes.get(tab_id)

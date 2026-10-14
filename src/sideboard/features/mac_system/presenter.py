@@ -214,13 +214,12 @@ def present_summary(inputs: PresentInput) -> ViewModel:
     if not isinstance(payload, MacPayload):
         return ViewModel(title="Mac", status=status or _empty_status())
     metrics = _summary_metrics(payload, settings, inputs.context)
-    series: tuple[Series, ...] = ()
-    if settings.sparkline and payload.history:
-        series = (_series(payload.history, "cpu_percent", series_id="cpu", label="CPU", unit="%"),)
+    # No sparkline here: the CPU metric above it already states the value, and the series
+    # adds a second CPU line plus a gap count. History is for the details view, where the
+    # four sparklines have room to be read.
     return ViewModel(
         title="Mac",
         metrics=metrics,
-        series=series,
         status=status,
     )
 

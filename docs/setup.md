@@ -147,8 +147,9 @@ protocol, gradient, special colour scheme or emoji meaning is required.
 
 A card is always laid out with a usable height:
 
-* the **Overview** fills the window: two pinned slots and two rotating slots share it,
-  and narrowing merges the rotating queues rather than squeezing them;
+* the **Overview** fills the window: every configured slot, two per row, in slot order
+  (pin two weather sources to compare them side by side), and narrowing merges the
+  rotating queues rather than squeezing them;
 * a **detail tab** (Money, Watch, Life) sizes each card from what it actually contains,
   so a table gets rows and a metrics card gets lines;
 * a **stack tab** (Systems) does the same and **scrolls** when the cards together need
@@ -164,7 +165,7 @@ Measured in terminal columns and rows.
 
 | Size | Overview |
 |---|---|
-| ≥110 × 32 | 2×2 grid: two pinned slots, two independently rotating slots |
+| ≥110 × 32 | two slots per row, as many rows as there are configured slots |
 | ≥70 × 20 | pinned slot on top, merged rotating queue below |
 | ≥60 × 20 | one card at a time, pins preserved |
 | below 60 × 20 | compact one-line summaries and a status list instead of clipped cards |

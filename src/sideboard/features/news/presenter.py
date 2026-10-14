@@ -116,18 +116,21 @@ def build_digest(
     return tuple(chosen[:digest_size])
 
 
-def _item(article: Article, *, badge: bool = True) -> Item:
-    meta: list[tuple[str, str]] = []
-    if badge:
-        meta.append(("cat", BUCKET_LABELS.get(article.category, article.category)))
+def _item(article: Article, *, badge: bool = True, excerpt: bool = False) -> Item:
+    """One digest row.
+
+    The badge already names the bucket, so there is no "cat <bucket>" meta line repeating
+    it, and the excerpt is shown only where there is room for it: a compact card lists
+    headlines to pick from, and the article itself is one key press away.
+    """
     return Item(
         id=f"news:{article.id}",
         title=article.title,
-        subtitle=article.excerpt,
+        subtitle=article.excerpt if excerpt else None,
         url=article.url,
         category=article.category,
         published_at=article.published,
-        meta=tuple(meta),
+        meta=(),
         privacy=Privacy.PUBLIC,
         source_id=article.source_id,
         badge=BUCKET_LABELS.get(article.category) if badge else None,
@@ -194,31 +197,20 @@ def _compact_view(
                 hints=(f"empty buckets: {', '.join(missing)}" if missing else "",),
             ),
         )
-    missing = [BUCKET_LABELS.get(b, b) for b in buckets if b not in {a.category for a in digest}]
-    ai = sum(1 for article in digest if article.ai_related)
+    # One count on the card. "AI 0" and "buckets 6" answered questions nobody asked at a
+    # glance; both are in the detail view, where the caps and the configured buckets are
+    # spelled out.
     metrics = (
         Metric(id="digest_size", label="items", value_text=str(len(digest)), basis="digest"),
-        Metric(
-            id="ai_items",
-            label="AI",
-            value_text=str(ai),
-            basis=f"cap {settings.max_ai_items_per_digest}",
-        ),
-        Metric(
-            id="buckets",
-            label="buckets",
-            value_text=str(len({a.category for a in digest})),
-            basis=f"of {len(buckets)} configured",
-        ),
     )
     return ViewModel(
         title="News",
         metrics=metrics,
         items=tuple(_item(article) for article in digest),
-        footnote=(
-            f"source excerpts · {len(payload.reports)} feeds · "
-            f"unavailable buckets: {', '.join(missing) if missing else 'none'}"
-        ),
+        # No footnote on the card: "unavailable buckets" beside six readable headlines is
+        # a warning about feeds the reader is not looking at. The detail view lists the
+        # feeds and what each of them returned.
+        footnote=None,
     )
 
 
@@ -233,14 +225,33 @@ def _detail_view(
     for bucket in buckets:
         for article in payload.articles:
             if article.category == bucket and _fresh(article, context.now, settings.max_age_hours):
-                items.append(_item(article, badge=False))
+                items.append(_item(article, badge=False, excerpt=True))
     metrics = [
         Metric(
             id="articles", label="articles", value_text=str(len(payload.articles)), basis="cached"
         ),
         Metric(id="feeds", label="feeds", value_text=str(len(payload.reports)), basis="configured"),
+        Metric(
+            id="ai_items",
+            label="AI in digest",
+            value_text=str(sum(1 for article in payload.articles if article.ai_related)),
+            basis=f"cap {settings.max_ai_items_per_digest}",
+        ),
     ]
     feeds_failed = [report.label for report in payload.reports if report.status != "ok"]
+    empty = [
+        BUCKET_LABELS.get(bucket, bucket)
+        for bucket in buckets
+        if not any(
+            article.category == bucket and _fresh(article, context.now, settings.max_age_hours)
+            for article in payload.articles
+        )
+    ]
+    footnote = "full articles open in the browser; only publisher excerpts are cached"
+    if empty:
+        # Stated here rather than on the card: a missing bucket is only actionable when
+        # the reader can see the buckets that did arrive and the feeds behind them.
+        footnote += f" · no article for: {', '.join(empty)}"
     return ViewModel(
         title="News",
         subtitle=(
@@ -250,7 +261,7 @@ def _detail_view(
         status=envelope_status,
         metrics=tuple(metrics),
         items=tuple(items[: settings.limit * 4]),
-        footnote="full articles open in the browser; only publisher excerpts are cached",
+        footnote=footnote,
     )
 
 

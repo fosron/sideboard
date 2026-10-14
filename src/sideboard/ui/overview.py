@@ -2,7 +2,7 @@
 
 Measured in terminal columns and rows, never iPad pixels.
 
-* ``grid4``  — ≥110 columns and ≥32 rows: A · B (pinned) over C · D (rotating)
+* ``grid4``  — ≥110 columns and ≥32 rows: every configured slot, two per row, in order
 * ``stack2`` — ≥70 columns: the pinned slot on top, merged rotating queue below
 * ``single`` — ≥60×20: one card normally, pins preserved
 * ``compact`` — below 60×20: a useful one-line status list
@@ -161,7 +161,13 @@ class OverviewPane(Widget):
         rows = self.query_one("#sb-overview-rows", Vertical)
         await rows.remove_children()
         self._cards.clear()
-        chunks = [self.specs[0:2], self.specs[2:4]] if mode == "grid4" else [self.specs]
+        # Two slots per row, for as many slots as the configuration defines: a sixth slot
+        # is a third row, not a card that silently never appears.
+        chunks = (
+            [self.specs[index : index + 2] for index in range(0, len(self.specs), 2)]
+            if mode == "grid4"
+            else [self.specs]
+        )
         for index, chunk in enumerate(chunks):
             if not chunk:
                 continue

@@ -29,6 +29,7 @@ from ...core.contracts import (
     TableColumn,
     TableRow,
     TableView,
+    ViewMode,
     ViewModel,
 )
 from ...core.present import status_from_envelope
@@ -237,6 +238,22 @@ def _pct(value: Decimal | None) -> str:
     return f"{value.quantize(Decimal('0.1'))}%"
 
 
+def _short_instrument(holding: object, width: int) -> str:
+    """The name when it fits the column, the identifier when it does not.
+
+    The compact table has three columns, so a name gets about a third of the card. A
+    thirty-five character fund name in a twenty character column was rendered as
+    "Vanguard FTSE Global A…", which identifies nothing; the identifier is short, unique
+    and — unlike the name — tells two listings of the same fund apart.
+    """
+    identifier = str(getattr(holding, "instrument_id", ""))
+    name = str(getattr(holding, "instrument_name", "") or "")
+    if not name:
+        return identifier
+    room = max(10, (width // 3) - 4)
+    return name if len(name) <= room else identifier
+
+
 def present_summary(inputs: PresentInput) -> ViewModel:
     settings = inputs.settings
     assert isinstance(settings, PortfolioSummarySettings)
@@ -259,6 +276,7 @@ def present_summary(inputs: PresentInput) -> ViewModel:
             ),
         )
 
+    detail = inputs.context.mode is ViewMode.DETAIL
     priced = [holding for holding in valuation.holdings if holding.priced]
     metrics: list[Metric] = [
         Metric(
@@ -281,7 +299,7 @@ def present_summary(inputs: PresentInput) -> ViewModel:
             basis="holdings with a quote and an FX rate",
         ),
     ]
-    if settings.show_weights and priced:
+    if detail and settings.show_weights and priced:
         top = max(priced, key=lambda h: h.value_eur or Decimal(0))
         metrics.append(
             Metric(
@@ -292,7 +310,7 @@ def present_summary(inputs: PresentInput) -> ViewModel:
                 privacy=Privacy.PRIVATE,
             )
         )
-    if settings.show_concentration and settings.concentration_instrument:
+    if detail and settings.show_concentration and settings.concentration_instrument:
         weight = valuation.shares.get(settings.concentration_instrument)
         metrics.append(
             Metric(
@@ -318,19 +336,30 @@ def present_summary(inputs: PresentInput) -> ViewModel:
         change = (
             _money(holding.daily_change_native, holding.currency) if settings.show_change else "—"
         )
+        cells: dict[str, str] = {
+            "instrument": holding.instrument_name or holding.instrument_id,
+            "quantity": f"{holding.quantity:,f}",
+            "price": _money(holding.price, holding.currency),
+            "value": _money(holding.native_value, holding.currency),
+            "eur": _money(holding.value_eur, valuation.base_currency),
+            "weight": _pct(valuation.shares.get(holding.instrument_id)),
+            "change": change,
+            "basis": holding.price_basis,
+        }
+        if not detail:
+            # The overview card gets three columns that fit: what it is, what it is worth
+            # and how much of the tracked total that is. Quantity, unit price, native
+            # currency, daily change and price basis are one key press away, and none of
+            # them can be read once the column is narrower than its heading.
+            cells = {
+                "instrument": _short_instrument(holding, inputs.context.width),
+                "eur": _money(holding.value_eur, valuation.base_currency),
+                "weight": _pct(valuation.shares.get(holding.instrument_id)),
+            }
         rows.append(
             TableRow(
                 id=f"holding:{holding.account}:{holding.instrument_id}",
-                cells={
-                    "instrument": holding.instrument_name or holding.instrument_id,
-                    "quantity": f"{holding.quantity:,f}",
-                    "price": _money(holding.price, holding.currency),
-                    "value": _money(holding.native_value, holding.currency),
-                    "eur": _money(holding.value_eur, valuation.base_currency),
-                    "weight": _pct(valuation.shares.get(holding.instrument_id)),
-                    "change": change,
-                    "basis": holding.price_basis,
-                },
+                cells=cells,
                 privacy=Privacy.PRIVATE,
                 severity=Severity.UNKNOWN if holding.priced else Severity.WARNING,
             )
@@ -355,27 +384,45 @@ def present_summary(inputs: PresentInput) -> ViewModel:
                 for base, quote, when in valuation.fx_dates
             )
         )
+    columns = (
+        TableColumn(id="instrument", label="holding", privacy=Privacy.PRIVATE),
+        TableColumn(id="quantity", label="qty", align="right", privacy=Privacy.PRIVATE),
+        TableColumn(id="price", label="price", align="right", privacy=Privacy.PRIVATE),
+        TableColumn(id="value", label="native", align="right", privacy=Privacy.PRIVATE),
+        TableColumn(
+            id="eur", label=valuation.base_currency, align="right", privacy=Privacy.PRIVATE
+        ),
+        TableColumn(id="weight", label="share", align="right", privacy=Privacy.PRIVATE),
+        TableColumn(id="change", label="chg", align="right", privacy=Privacy.PRIVATE),
+        TableColumn(id="basis", label="basis", privacy=Privacy.PRIVATE),
+    )
+    if not detail:
+        columns = (
+            TableColumn(id="instrument", label="holding", privacy=Privacy.PRIVATE),
+            TableColumn(
+                id="eur",
+                label=f"value {valuation.base_currency}",
+                align="right",
+                privacy=Privacy.PRIVATE,
+            ),
+            TableColumn(
+                id="weight", label="share of tracked", align="right", privacy=Privacy.PRIVATE
+            ),
+        )
     return ViewModel(
         title="Portfolio",
         metrics=tuple(metrics),
         table=TableView(
-            columns=(
-                TableColumn(id="instrument", label="holding", privacy=Privacy.PRIVATE),
-                TableColumn(id="quantity", label="qty", align="right", privacy=Privacy.PRIVATE),
-                TableColumn(id="price", label="price", align="right", privacy=Privacy.PRIVATE),
-                TableColumn(id="value", label="native", align="right", privacy=Privacy.PRIVATE),
-                TableColumn(
-                    id="eur", label=valuation.base_currency, align="right", privacy=Privacy.PRIVATE
-                ),
-                TableColumn(id="weight", label="share", align="right", privacy=Privacy.PRIVATE),
-                TableColumn(id="change", label="chg", align="right", privacy=Privacy.PRIVATE),
-                TableColumn(id="basis", label="basis", privacy=Privacy.PRIVATE),
-            ),
+            columns=columns,
             rows=tuple(rows),
-            footnote="share is a share of the tracked total, not of the whole portfolio",
+            footnote=(
+                "share is a share of the tracked total, not of the whole portfolio"
+                if detail
+                else None
+            ),
         ),
         status=status,
-        footnote=" · ".join(footnote_parts),
+        footnote=" · ".join(footnote_parts) if detail else None,
         privacy=Privacy.PRIVATE,
     )
 
@@ -486,12 +533,13 @@ def present_events(inputs: PresentInput) -> ViewModel:
         )
     )
     if settings.show_links:
+        detail_events = inputs.context.mode is ViewMode.DETAIL
         for link in payload.links:
             items.append(
                 Item(
                     id=f"link:{link.link_id}",
                     title=link.label,
-                    subtitle=link.url,
+                    subtitle=link.url if detail_events else None,
                     url=link.url,
                     category="link",
                     privacy=Privacy.PRIVATE,
@@ -511,7 +559,11 @@ def present_events(inputs: PresentInput) -> ViewModel:
     return ViewModel(
         title="Events",
         items=tuple(items[: settings.limit]),
-        footnote="declared, received and estimated amounts are distinct; no forecast is invented",
+        footnote=(
+            "declared, received and estimated amounts are distinct; no forecast is invented"
+            if inputs.context.mode is ViewMode.DETAIL
+            else None
+        ),
         privacy=Privacy.PRIVATE,
     )
 
@@ -607,6 +659,7 @@ def present_vercom(inputs: PresentInput) -> ViewModel:
                 )
             )
         if settings.show_links:
+            detail_vercom = inputs.context.mode is ViewMode.DETAIL
             for link in payload_links:
                 if link.instrument_id and target and link.instrument_id != target:
                     continue
@@ -614,7 +667,7 @@ def present_vercom(inputs: PresentInput) -> ViewModel:
                     Item(
                         id=f"link:{link.link_id}",
                         title=link.label,
-                        subtitle=link.url,
+                        subtitle=link.url if detail_vercom else None,
                         url=link.url,
                         category="link",
                         privacy=Privacy.PRIVATE,
@@ -642,7 +695,9 @@ def present_vercom(inputs: PresentInput) -> ViewModel:
         title=settings.label,
         metrics=tuple(metrics),
         items=tuple(items[:12]),
-        footnote=" · ".join(footnote),
+        # Notes about forecast honesty belong where the numbers are: on the card they were
+        # cut off mid-word and read as an unexplained warning.
+        footnote=" · ".join(footnote) if inputs.context.mode is ViewMode.DETAIL else None,
         privacy=Privacy.PRIVATE,
     )
 
