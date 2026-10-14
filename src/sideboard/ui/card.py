@@ -26,7 +26,7 @@ from .renderers import render_items, render_metrics, render_series, render_statu
 from .styles import DIM
 from .text import control_free, single_line
 
-__all__ = ["CardShell", "freshness_line"]
+__all__ = ["CardShell", "cursor_layout", "cursor_target", "freshness_line"]
 
 
 def freshness_line(
@@ -284,9 +284,8 @@ class CardShell(Widget, can_focus=True):
         view = self.view
         if view is None:
             return 0
-        if view.table is not None and view.table.rows:
-            return len(view.table.rows)
-        return len(view.items)
+        items, rows = cursor_layout(view)
+        return items + rows
 
     def _clamp_cursor(self) -> None:
         rows = self.row_count
@@ -296,23 +295,27 @@ class CardShell(Widget, can_focus=True):
         view = self.view
         if view is None:
             return None
-        if view.table is not None and view.table.rows:
-            rows = view.table.rows
-            return rows[self.cursor_index].id if 0 <= self.cursor_index < len(rows) else None
-        if view.items and 0 <= self.cursor_index < len(view.items):
-            return view.items[self.cursor_index].id
-        return None
+        target = cursor_target(view, self.cursor_index)
+        if target is None:
+            return None
+        kind, index = target
+        if kind == "item":
+            return view.items[index].id
+        assert view.table is not None
+        return view.table.rows[index].id
 
     def selected_url(self) -> str | None:
         view = self.view
         if view is None:
             return None
-        if view.table is not None and view.table.rows:
-            rows = view.table.rows
-            return rows[self.cursor_index].url if 0 <= self.cursor_index < len(rows) else None
-        if view.items and 0 <= self.cursor_index < len(view.items):
-            return view.items[self.cursor_index].url
-        return None
+        target = cursor_target(view, self.cursor_index)
+        if target is None:
+            return None
+        kind, index = target
+        if kind == "item":
+            return view.items[index].url
+        assert view.table is not None
+        return view.table.rows[index].url
 
     def action_cursor_up(self) -> None:
         self._move_cursor(-1)
@@ -466,20 +469,27 @@ class CardShell(Widget, can_focus=True):
             if view.footnote:
                 overhead += 1
             budget = max(1, height - overhead - 1)
+            item_count, _ = cursor_layout(view)
             sections.append(
                 render_items(
                     view.items,
                     width=width,
                     privacy=self.privacy,
-                    selected_index=self.cursor_index,
+                    selected_index=(self.cursor_index if self.cursor_index < item_count else -1),
                     max_rows=budget,
                 )
             )
         table = view.table
         if table is not None and table.columns:
+            item_count, _ = cursor_layout(view)
             sections.append(
                 render_table(
-                    table, width=width, privacy=self.privacy, selected_index=self.cursor_index
+                    table,
+                    width=width,
+                    privacy=self.privacy,
+                    selected_index=(
+                        self.cursor_index - item_count if self.cursor_index >= item_count else -1
+                    ),
                 )
             )
             footnote = _table_footnote(table, width)
@@ -494,6 +504,28 @@ class CardShell(Widget, can_focus=True):
         if not sections:
             sections.append(Text("no data", style=DIM))
         return Group(*sections)
+
+
+def cursor_layout(view: ViewModel) -> tuple[int, int]:
+    """How a view's rows are split for the cursor: items first, then table rows.
+
+    A view can hold both (weather: hours then days). Treating them as one list is what
+    lets the cursor reach the last row of either, and each section is then marked with its
+    own relative index — the same index applied to both drew two chevrons at once.
+    """
+    items = len(view.items)
+    rows = len(view.table.rows) if view.table is not None else 0
+    return items, rows
+
+
+def cursor_target(view: ViewModel, index: int) -> tuple[str, int] | None:
+    """Resolve a cursor index into ``("item", i)`` or ``("row", i)``."""
+    items, rows = cursor_layout(view)
+    if 0 <= index < items:
+        return ("item", index)
+    if items <= index < items + rows:
+        return ("row", index - items)
+    return None
 
 
 def _table_footnote(table: object, width: int) -> Text:

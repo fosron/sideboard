@@ -196,3 +196,96 @@ async def test_a_row_without_a_link_does_not_open_another_row(tmp_path: Path) ->
         assert opened == [], "a row without a link must not open another row's"
         notices = [str(note.message) for note in app._notifications]
         assert any("No link on this row" in note for note in notices), notices
+
+
+async def test_one_cursor_reaches_items_and_table_rows_and_marks_one(tmp_path: Path) -> None:
+    """A view with both sections is one list, and only one row carries the chevron.
+
+    The same index was applied to the item list and the table, so two rows were marked at
+    once, and `row_count` counted only the items, so the last date could not be reached.
+    """
+    from textual.app import App
+
+    from sideboard.core.contracts import (
+        Item,
+        Privacy,
+        TableColumn,
+        TableRow,
+        TableView,
+        ViewModel,
+    )
+    from sideboard.ui.card import cursor_layout, cursor_target
+    from sideboard.ui.palettes import resolve_palette
+    from sideboard.ui.screens import DetailRow, DetailScreen
+    from sideboard.ui.theme import build_rich_theme
+
+    view = ViewModel(
+        title="Weather",
+        items=tuple(
+            Item(
+                id=f"hour-{hour}",
+                title=f"{hour}:00",
+                url=f"https://example.com/{hour}",
+                privacy=Privacy.PUBLIC,
+            )
+            for hour in (18, 19)
+        ),
+        table=TableView(
+            columns=(TableColumn(id="date", label="Date"),),
+            rows=tuple(
+                TableRow(
+                    id=f"2026-10-{day}",
+                    cells={"date": f"Oct {day}"},
+                    url=f"https://example.com/d{day}",
+                )
+                for day in (14, 15, 16)
+            ),
+        ),
+    )
+    assert cursor_layout(view) == (2, 3)
+    assert cursor_target(view, 0) == ("item", 0)
+    assert cursor_target(view, 1) == ("item", 1)
+    assert cursor_target(view, 2) == ("row", 0)
+    assert cursor_target(view, 4) == ("row", 2)
+    assert cursor_target(view, 5) is None
+
+    class Host(App[None]):
+        def on_load(self) -> None:
+            self.console.push_theme(build_rich_theme(resolve_palette("sideboard")))
+
+        def on_mount(self) -> None:
+            self.push_screen(
+                DetailScreen(
+                    title="Weather",
+                    view=view,
+                    privacy=False,
+                    url_provider=lambda: None,
+                    item_provider=lambda: None,
+                )
+            )
+
+    app = Host()
+    opened: list[str] = []
+    app.open_validated_url = lambda url: opened.append(url)  # type: ignore[method-assign]
+    async with app.run_test(size=(100, 30)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, DetailScreen)
+        assert screen._rows() == 5, "the cursor must reach the last date"
+        for _ in range(4):
+            await pilot.press("down")
+            await pilot.pause()
+        assert screen.index == 4, "four presses reach the last table row"
+
+        def plain(widget) -> str:  # type: ignore[no-untyped-def]
+            # A Static wraps what it was given in a Visual; the Rich renderable is inside.
+            renderable = getattr(widget.visual, "_renderable", widget.visual)
+            return "".join(text for text, _style, _control in app.console.render(renderable))
+
+        rows = list(screen.query(DetailRow))
+        chevrons = sum(plain(row).count("›") for row in rows)
+        table_text = plain(screen.query_one("#sb-detail-table"))
+        assert chevrons + table_text.count("›") == 1, (chevrons, table_text)
+        await pilot.press("enter")
+        await pilot.pause()
+        assert opened == ["https://example.com/d16"], opened

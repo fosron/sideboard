@@ -20,6 +20,7 @@ from textual.widgets import Input, OptionList, Static
 from textual.widgets.option_list import Option
 
 from ..core.contracts import ViewModel
+from .card import cursor_layout, cursor_target
 from .renderers import (
     render_item_row,
     render_items,
@@ -221,12 +222,13 @@ class DetailScreen(DismissOnOutsideClick, ModalScreen[None]):
         )
         head.update(Group(*sections), layout=False)
         table = self.query_one("#sb-detail-table", Static)
+        item_count, _ = cursor_layout(self.view)
         table.update(
             render_table(
                 self.view.table,
                 width=width,
                 privacy=self.privacy,
-                selected_index=self.index,
+                selected_index=(self.index - item_count if self.index >= item_count else -1),
             )
             if self.view.table is not None and self.view.table.columns
             else Text(""),
@@ -247,26 +249,33 @@ class DetailScreen(DismissOnOutsideClick, ModalScreen[None]):
             )
 
     def _rows(self) -> int:
-        """Rows the cursor can reach: the table when there is one, otherwise the items."""
-        if self.view.table is not None and self.view.table.rows:
-            return len(self.view.table.rows)
-        return len(self.view.items)
+        """Rows the cursor can reach: the items, then the table rows.
+
+        One list, so the cursor reaches the last row of either. Treating them separately
+        also meant the same index marked a row in both sections at once — two chevrons.
+        """
+        items, rows = cursor_layout(self.view)
+        return items + rows
 
     def _selected_url(self) -> str | None:
-        table = self.view.table
-        if table is not None and table.rows and 0 <= self.index < len(table.rows):
-            return table.rows[self.index].url
-        if 0 <= self.index < len(self.view.items):
-            return self.view.items[self.index].url
-        return None
+        target = cursor_target(self.view, self.index)
+        if target is None:
+            return None
+        kind, index = target
+        if kind == "item":
+            return self.view.items[index].url
+        assert self.view.table is not None
+        return self.view.table.rows[index].url
 
     def _selected_id(self) -> str | None:
-        table = self.view.table
-        if table is not None and table.rows and 0 <= self.index < len(table.rows):
-            return table.rows[self.index].id
-        if 0 <= self.index < len(self.view.items):
-            return self.view.items[self.index].id
-        return None
+        target = cursor_target(self.view, self.index)
+        if target is None:
+            return None
+        kind, index = target
+        if kind == "item":
+            return self.view.items[index].id
+        assert self.view.table is not None
+        return self.view.table.rows[index].id
 
     def action_cursor_up(self) -> None:
         self._move_cursor(-1)

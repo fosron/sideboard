@@ -112,7 +112,7 @@ reference on screen. The tabs are the first row, so the cards get the rest of th
 | `Ctrl+R` | validate and reload configuration; an invalid update keeps the running one |
 | `Tab` / `Shift+Tab` | next / previous card of the visible tab, wrapping |
 | `←` / `→` (`h` / `l`) | move to the card on the left / right, wrapping at the ends |
-| `↑` / `↓` (`k` / `j`) | move the selection inside the focused card; at the first or last row it moves to the card above or below |
+| `↑` / `↓` (`k` / `j`) | move the selection inside the focused card; at the first or last row it moves to the card above or below. A view with both a list and a table is one list: the cursor walks the items and then continues into the table rows |
 | `PgUp` / `PgDn`, `Home` / `End`, wheel | scroll a tab whose cards are taller than the window |
 | `Space` | toggle global visual pause (collection is independent) |
 | `p` | pin / unpin the focused Overview card |
