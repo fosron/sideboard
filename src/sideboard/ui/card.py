@@ -37,10 +37,15 @@ def freshness_line(
     held_reasons: tuple[str, ...] = (),
     demo: bool = False,
     offline: bool = False,
-    dwell_remaining: float | None = None,
     pinned: bool = False,
 ) -> str:
-    """Honest one-line provenance: source date, fetch time, freshness."""
+    """Honest one-line provenance: source date, fetch time, freshness.
+
+    There is deliberately no dwell countdown here. A string that changes every second
+    forced a repaint of every rotating card every second, and this line is the only part
+    of a card that changed on a timer. Rotation progress is visible from the card
+    changing, and ``n`` advances it on demand.
+    """
     parts: list[str] = []
     if demo:
         parts.append("demo")
@@ -50,8 +55,6 @@ def freshness_line(
         parts.append("pinned")
     if held_reasons:
         parts.append("held:" + "+".join(held_reasons))
-    elif dwell_remaining is not None and dwell_remaining > 0:
-        parts.append(f"{int(dwell_remaining)}s")
     if envelope is None:
         parts.append("no source")
         return " · ".join(parts)
@@ -143,6 +146,8 @@ class CardShell(Widget, can_focus=True):
         self._min_width = 24
         self._min_height = 3
         self._signature: tuple[object, ...] | None = None
+        self._chrome_title: str | None = None
+        self._chrome_subtitle: str | None = None
 
     # ------------------------------------------------------------------ content
 
@@ -189,7 +194,11 @@ class CardShell(Widget, can_focus=True):
         signature = self._build_signature()
         if signature != self._signature:
             self._signature = signature
-            self.refresh(layout=True)
+            # A repaint, not a layout: the card's box is set by CSS or by
+            # DetailPane.apply_heights, so new content cannot change its geometry.
+            # refresh(layout=True) here marked the whole screen for re-layout, and a
+            # pointer sweep across four cards did that dozens of times a second.
+            self.refresh()
 
     def estimated_content_rows(self) -> int:
         """Rows this card's current view needs, for a scrollable stack of cards.
@@ -218,17 +227,35 @@ class CardShell(Widget, can_focus=True):
         return max(3, rows)
 
     def _apply_chrome(self) -> None:
+        """Update the border title and subtitle, but only when they actually change.
+
+        Textual's ``border_title``/``border_subtitle`` reject an unchanged value by
+        repainting anyway, and this ran on every present — twice a second per card while
+        idle, which repainted the whole dashboard for nothing. ``set_class`` already
+        checks for an unchanged class, so it needs no guard.
+        """
         marker = "◆ " if self.is_pinned else ""
         label = f"{marker}{control_free(self.card_title) or 'card'}"
         if self.slot_label:
             label = f"[{control_free(self.slot_label)}] {label}"
-        self.border_title = label
-        self.border_subtitle = single_line(self.freshness, 80) if self.freshness else None
+        if label != self._chrome_title:
+            self._chrome_title = label
+            self.border_title = label
+        subtitle = single_line(self.freshness, 80) if self.freshness else None
+        if subtitle != self._chrome_subtitle:
+            self._chrome_subtitle = subtitle
+            self.border_subtitle = subtitle
         self.set_class(self.is_held, "sb-held")
         self.set_class(self.is_pinned, "sb-pinned")
 
     def _build_signature(self) -> tuple[object, ...]:
-        view = self.view
+        """Everything that affects what this card looks like.
+
+        The view's *content* is included, not just its shape: a Mac card whose CPU value
+        changes, or a digest that rotates to another article with the same item count,
+        must repaint. Comparing only counts meant such updates were silently dropped.
+        The digest is bounded so a long list cannot make this expensive.
+        """
         return (
             self.widget_id,
             self.card_title,
@@ -241,18 +268,7 @@ class CardShell(Widget, can_focus=True):
             self.cursor_index,
             self.size.width,
             self.size.height,
-            None
-            if view is None
-            else (
-                view.title,
-                view.subtitle,
-                len(view.metrics),
-                len(view.items),
-                None if view.table is None else len(view.table.rows),
-                len(view.series),
-                view.footnote,
-                None if view.status is None else view.status.headline,
-            ),
+            None if self.view is None else _view_digest(self.view),
         )
 
     # ------------------------------------------------------------------ selection
@@ -463,3 +479,38 @@ def _table_footnote(table: object, width: int) -> Text:
 def signature_of(*values: object) -> int:
     """Cheap stable signature helper for renderers that need memoisation."""
     return zlib.crc32(repr(values).encode())
+
+
+def _view_digest(view: ViewModel) -> tuple[object, ...]:
+    """A cheap, bounded summary of everything a renderer will draw.
+
+    Used to decide whether a card must repaint. Bounded so a hundred-row table cannot
+    turn the comparison into the expensive part of a frame.
+    """
+    digest: list[object] = [
+        view.title,
+        view.subtitle,
+        view.footnote,
+        None
+        if view.status is None
+        else (str(view.status.severity), view.status.headline, view.status.detail),
+    ]
+    for metric in view.metrics:
+        digest.append((metric.id, metric.value_text, metric.unit, metric.available, metric.note))
+    for item in view.items[:80]:
+        digest.append((item.id, item.title, item.subtitle, item.badge, item.saved, item.read))
+    if view.table is not None:
+        digest.append(("cols", *(column.id for column in view.table.columns)))
+        for row in view.table.rows[:80]:
+            digest.append((row.id, tuple(sorted(row.cells.items())), str(row.severity)))
+        digest.append(("truncated", view.table.truncated, view.table.footnote))
+    for series in view.series:
+        digest.append(
+            (
+                series.id,
+                series.unit,
+                series.label,
+                *((point.t, point.value) for point in series.points[-120:]),
+            )
+        )
+    return tuple(digest)

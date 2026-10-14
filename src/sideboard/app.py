@@ -49,7 +49,7 @@ from .core.scheduler import Scheduler
 from .core.storage import CORE_MIGRATIONS, Database, ensure_private_dir
 from .features import build_feature_registry
 from .ui.card import CardShell, freshness_line
-from .ui.overview import LayoutMode, OverviewPane, layout_mode, slot_specs
+from .ui.overview import LayoutMode, OverviewPane, SlotSpec, layout_mode, slot_specs
 from .ui.rotation import Candidate, HoldReason, RotationController
 from .ui.screens import (
     CommandPaletteScreen,
@@ -66,6 +66,11 @@ log = logging.getLogger("sideboard.app")
 TICK_SECONDS = 0.25
 STATUS_SECONDS = 1.0
 MAINTENANCE_SECONDS = 30.0
+# A repaint of one card is a few kilobytes; a pointer sweeping across the grid would
+# otherwise repaint a card per event. The hold itself is applied immediately — only the
+# repaint that shows it is coalesced, so the indicator can lag the pointer by at most
+# this much while a fast sweep costs a bounded number of repaints.
+HOVER_COALESCE_SECONDS = 0.2
 
 TAB_KEYS = ("1", "2", "3", "4", "5", "6", "7", "8", "9")
 
@@ -217,6 +222,8 @@ class SideboardApp(App[None]):
         self._mouse_screen: MouseDiagnosticScreen | None = None
         self._unsubscribe: Any = None
         self._tab_signature: tuple[str, ...] = ()
+        self._pending_slot_repaints: set[str] = set()
+        self._slot_repaint_timer: Any = None
 
     # ------------------------------------------------------------------ bindings
 
@@ -497,7 +504,6 @@ class SideboardApp(App[None]):
         held: bool = False,
         hold_reasons: tuple[str, ...] = (),
         pinned: bool = False,
-        dwell_remaining: float | None = None,
     ) -> None:
         if widget_id is None:
             card.set_card(
@@ -539,7 +545,6 @@ class SideboardApp(App[None]):
             held_reasons=hold_reasons,
             demo=self.demo,
             offline=self.offline,
-            dwell_remaining=dwell_remaining,
             pinned=pinned,
         )
         card.set_card(
@@ -561,30 +566,55 @@ class SideboardApp(App[None]):
             min_height=instance.spec.min_height,
         )
 
+    def _schedule_slot_repaint(self, slot_id: str) -> None:
+        """Ask for a slot repaint, coalescing bursts from a moving pointer."""
+        self._pending_slot_repaints.add(slot_id)
+        if self._slot_repaint_timer is None:
+            self._slot_repaint_timer = self.set_timer(
+                HOVER_COALESCE_SECONDS, self._flush_slot_repaints
+            )
+
+    def _flush_slot_repaints(self) -> None:
+        self._slot_repaint_timer = None
+        pending = sorted(self._pending_slot_repaints)
+        self._pending_slot_repaints.clear()
+        for slot_id in pending:
+            self._present_slot(slot_id)
+
+    def _present_slot(self, slot_id: str) -> None:
+        """Re-present a single overview slot, for a change that only affects it."""
+        pane = self._overview
+        if pane is None:
+            return
+        for spec in pane.specs:
+            if spec.slot_id == slot_id:
+                self._present_overview_slot(spec)
+                return
+
     def _present_overview(self) -> None:
+        pane = self._overview
+        if pane is None or self._rotation is None:
+            return
+        for spec in pane.specs:
+            self._present_overview_slot(spec)
+
+    def _present_overview_slot(self, spec: SlotSpec) -> None:
+        """Present one slot's card. Used directly by hover, which affects one slot."""
         pane = self._overview
         rotation = self._rotation
         if pane is None or rotation is None:
             return
-        now = self.runtime.clock.monotonic()
-        for spec in pane.specs:
-            card = pane.card(spec.slot_id)
-            if card is None:
-                continue
-            state = rotation.slots.get(spec.slot_id)
-            remaining = None
-            if state is not None and not state.pinned and not rotation.held(spec.slot_id):
-                candidate = state.dwell - (now - state.shown_at)
-                remaining = candidate if 0 < candidate < 600 else None
-            self._present_card(
-                card,
-                rotation.current(spec.slot_id),
-                mode=ViewMode.COMPACT,
-                held=rotation.held(spec.slot_id),
-                hold_reasons=rotation.hold_reasons(spec.slot_id),
-                pinned=spec.pinned,
-                dwell_remaining=remaining,
-            )
+        card = pane.card(spec.slot_id)
+        if card is None:
+            return
+        self._present_card(
+            card,
+            rotation.current(spec.slot_id),
+            mode=ViewMode.COMPACT,
+            held=rotation.held(spec.slot_id),
+            hold_reasons=rotation.hold_reasons(spec.slot_id),
+            pinned=spec.pinned,
+        )
 
     def _present_detail(self, tab_id: str) -> None:
         pane = self._detail_panes.get(tab_id)
@@ -625,8 +655,12 @@ class SideboardApp(App[None]):
 
     def _on_status_tick(self) -> None:
         self._runtime_status = self.runtime.scheduler.runtime_status()
-        self.runtime.scheduler.set_active_tab(self._active_tab)
-        self._update_chrome(force=True)
+        # Neither of these may be unconditional every second:
+        #   * set_active_tab rebuilds the demand index and can start or stop tasks, and
+        #     the tab only changes on a user action (`_set_tab` already does it);
+        #   * Static.update() defaults to layout=True, so forcing the chrome would run a
+        #     full screen layout twice a second for a clock that changes once a minute.
+        self._update_chrome()
         now = int(self.runtime.clock.monotonic())
         if now != self._last_second:
             self._last_second = now
@@ -753,7 +787,10 @@ class SideboardApp(App[None]):
         if event.active:
             self._cancel_hold_timer(slot_id)
             if rotation.set_hold(slot_id, HoldReason.HOVER, True):
-                self._present_overview()
+                # One slot, not all four, and coalesced: a pointer sweep across the
+                # grid used to re-present every card on every transition, each with a
+                # layout pass.
+                self._schedule_slot_repaint(slot_id)
         else:
             self._arm_hover_release(slot_id)
 
@@ -777,7 +814,7 @@ class SideboardApp(App[None]):
             return
         self._cancel_hold_timer(slot_id)
         if rotation.set_hold(slot_id, HoldReason.HOVER, False):
-            self._present_overview()
+            self._schedule_slot_repaint(slot_id)
 
     def _cancel_hold_timer(self, slot_id: str) -> None:
         timer = self._hold_timers.pop(slot_id, None)
@@ -799,7 +836,7 @@ class SideboardApp(App[None]):
             self._present_overview()
 
         self._hold_timers[slot_id] = self.set_timer(rotation.keyboard_hold_seconds, release)
-        self._present_overview()
+        self._schedule_slot_repaint(slot_id)
 
     def on_app_blur(self) -> None:
         """Terminal blur: drop stale pointer holds. Never pause globally."""
