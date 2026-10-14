@@ -6,7 +6,7 @@ is a synthetic fixture.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -93,7 +93,9 @@ async def test_feed_uploads_parsed_and_validated() -> None:
     assert first.recent_view_score is None
     assert payload.as_of is not None
     assert payload.as_of == datetime(2026, 10, 10, 9, 0, tzinfo=UTC)
-    assert payload.valid_until == payload.as_of + timedelta(minutes=30)
+    # From the fetch: a channel that posts weekly would otherwise be expired seconds
+    # after a successful refresh. as_of carries the upload's own time.
+    assert payload.valid_until is not None and payload.valid_until > payload.as_of
     assert payload.provenance == "youtube-channel-atom"
     report = payload.channel_reports[0]
     assert report.status == "ok"

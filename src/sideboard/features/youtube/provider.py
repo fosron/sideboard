@@ -296,9 +296,9 @@ class YouTubeProvider:
             ),
             as_of=as_of,
             precision=Precision.INSTANT,
-            valid_until=(
-                as_of + timedelta(seconds=VALID_UNTIL_SECONDS) if as_of is not None else None
-            ),
+            # From the fetch, not from the newest upload: a channel that posts weekly
+            # would otherwise look expired seconds after a successful refresh.
+            valid_until=context.clock.now() + timedelta(seconds=VALID_UNTIL_SECONDS),
             provenance=PROVENANCE,
         )
 

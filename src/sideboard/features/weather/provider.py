@@ -75,7 +75,7 @@ class WeatherProvider:
         body = response.json()
         if not isinstance(body, Mapping):
             raise ParseError("weather response was not a JSON object")
-        return _parse_payload(body, settings)
+        return _parse_payload(body, settings, issued_at=context.clock.now())
 
     def _validators(self, context: ProviderBuild) -> tuple[str | None, str | None]:
         """Instance validators win; fall back to the host's cached envelope values."""
@@ -152,7 +152,12 @@ def _request_params(
 # --------------------------------------------------------------------------- #
 
 
-def _parse_payload(data: Mapping[str, Any], settings: WeatherSettings) -> WeatherPayload:
+def _parse_payload(
+    data: Mapping[str, Any],
+    settings: WeatherSettings,
+    *,
+    issued_at: datetime,
+) -> WeatherPayload:
     """Map an untrusted Open-Meteo body onto validated payload models.
 
     Only a body that is not a JSON object is rejected. Individually missing or
@@ -216,7 +221,9 @@ def _parse_payload(data: Mapping[str, Any], settings: WeatherSettings) -> Weathe
         daily=daily,
         as_of=current_time,
         precision=Precision.INSTANT,
-        valid_until=(current_time + timedelta(seconds=VALID_FOR_SECONDS) if current_time else None),
+        # Measured from the fetch, not from the observation: a forecast issued at 15:30
+        # is still current at 15:55, and `as_of` already carries the model's own time.
+        valid_until=issued_at + timedelta(seconds=VALID_FOR_SECONDS),
         provenance="open-meteo",
         coverage=Coverage(
             missing=unique_missing,

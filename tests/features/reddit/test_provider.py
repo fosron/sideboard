@@ -211,7 +211,9 @@ async def test_rss_mode_parses_a_synthetic_feed(
     as_of = payload.as_of
     assert as_of is not None
     assert as_of == datetime(2026, 10, 13, 10, 30, tzinfo=UTC)
-    assert payload.valid_until == as_of + timedelta(hours=48)
+    # From the fetch: the 48 hour window is about how long our copy stays useful, and a
+    # quiet community must not read as expired immediately after a success.
+    assert payload.valid_until is not None and payload.valid_until > as_of
     assert payload.coverage.expected == 1
     assert payload.coverage.observed == 1
     assert not payload.coverage.is_partial

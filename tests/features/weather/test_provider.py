@@ -21,7 +21,12 @@ from sideboard.core.contracts import (
 from sideboard.core.errors import CapabilityError, ParseError, UnavailableError
 from sideboard.features.weather.config import WeatherSettings
 from sideboard.features.weather.models import WeatherPayload
-from sideboard.features.weather.provider import FORECAST_URL, WeatherProvider, demo_builder
+from sideboard.features.weather.provider import (
+    FORECAST_URL,
+    VALID_FOR_SECONDS,
+    WeatherProvider,
+    demo_builder,
+)
 
 
 def test_provider_satisfies_the_contract() -> None:
@@ -38,7 +43,8 @@ async def test_fetch_parses_the_synthetic_fixture(
         return_value=httpx.Response(200, json=fixture_body, headers={"etag": '"v1"'})
     )
 
-    payload = await WeatherProvider().fetch(make_build(http_reader))
+    build = make_build(http_reader)
+    payload = await WeatherProvider().fetch(build)
 
     assert isinstance(payload, WeatherPayload)
     assert payload.location_label == "Home"
@@ -57,7 +63,11 @@ async def test_fetch_parses_the_synthetic_fixture(
     as_of = payload.as_of
     assert as_of is not None
     assert as_of == datetime(2026, 10, 13, 10, 0, tzinfo=UTC)
-    assert payload.valid_until == as_of + timedelta(minutes=20)
+    # valid_until says when our copy goes stale, so it is measured from the fetch: a
+    # forecast observed at 15:30 is still current minutes later, and as_of carries the
+    # model's own time. Deriving it from as_of marked a just-refreshed card as expired,
+    # which is exactly what a fixture with an old observation demonstrates.
+    assert payload.valid_until == build.clock.now() + timedelta(seconds=VALID_FOR_SECONDS)
     assert len(payload.hourly) == 24
     assert payload.hourly[0].at == as_of
     assert len(payload.daily) == 7
@@ -243,7 +253,9 @@ async def test_invalid_types_become_none_instead_of_raising(
     }
     mock_router.get(FORECAST_URL).mock(return_value=httpx.Response(200, json=body))
 
-    payload = await WeatherProvider().fetch(make_build(http_reader, settings=weather_settings))
+    build = make_build(http_reader, settings=weather_settings)
+
+    payload = await WeatherProvider().fetch(build)
 
     assert payload.current is not None
     assert payload.current.temperature_c is None  # "warm" is not a measurement
@@ -256,7 +268,9 @@ async def test_invalid_types_become_none_instead_of_raising(
     assert payload.hourly == ()  # no usable timestamp means no usable point
     assert payload.daily == ()
     assert payload.as_of is None
-    assert payload.valid_until is None
+    # No observation time is a statement about the *data*; our copy of the response still
+    # goes stale on the fetch clock, so valid_until is always set.
+    assert payload.valid_until == build.clock.now() + timedelta(seconds=VALID_FOR_SECONDS)
     assert payload.timezone == "Europe/Madrid"  # unusable echo replaced by config
     assert payload.coverage.is_partial is True
 

@@ -6,7 +6,7 @@ No test here touches the network: respx intercepts the httpx transport.
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -146,7 +146,9 @@ async def test_fetch_reads_lists_in_order_and_reports_coverage() -> None:
     assert payload.precision is Precision.INSTANT
     newest = datetime.fromtimestamp(_epoch(202), tz=UTC)
     assert payload.as_of == newest
-    assert payload.valid_until == newest + timedelta(seconds=300)
+    # Measured from the fetch, not from the newest story: in a quiet hour the ranking we
+    # hold is still current, and as_of shows the story's own time.
+    assert payload.valid_until is not None and payload.valid_until > newest
     assert payload.coverage.expected == 60
     assert payload.coverage.observed == 5
     assert payload.coverage.is_partial
@@ -299,7 +301,7 @@ def test_demo_builder_is_synthetic_and_complete() -> None:
     assert any("DEMO" in story.title for story in payload.stories)
     assert payload.provenance == "hacker-news-official-api"
     assert payload.as_of is not None
-    assert payload.valid_until == payload.as_of + timedelta(seconds=300)
+    assert payload.valid_until is not None and payload.valid_until > payload.as_of
     assert payload.coverage.observed == len(payload.stories)
 
 

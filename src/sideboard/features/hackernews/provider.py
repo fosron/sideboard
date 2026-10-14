@@ -206,9 +206,9 @@ class HackerNewsProvider:
             stories=tuple(stories),
             as_of=as_of,
             precision=Precision.INSTANT,
-            valid_until=(
-                as_of + timedelta(seconds=VALID_FOR_SECONDS) if as_of is not None else None
-            ),
+            # From the fetch, not from the newest story: in a quiet hour the ranking we
+            # hold is still the current ranking.
+            valid_until=context.clock.now() + timedelta(seconds=VALID_FOR_SECONDS),
             provenance=PROVENANCE,
             coverage=Coverage(
                 expected=settings.items_per_list * len(settings.lists),

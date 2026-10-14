@@ -153,7 +153,10 @@ class RedditProvider:
             community_reports=tuple(reports),
             as_of=as_of,
             precision=Precision.INSTANT,
-            valid_until=as_of + timedelta(hours=VALID_FOR_HOURS),
+            # From the fetch rather than from the newest entry: the plan's 48 hour window
+            # is about how long our copy of the list stays useful, and the entry date is
+            # visible separately.
+            valid_until=context.clock.now() + timedelta(hours=VALID_FOR_HOURS),
             provenance=PROVENANCE_RSS,
             coverage=Coverage(
                 expected=len(communities),
