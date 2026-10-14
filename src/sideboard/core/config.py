@@ -56,7 +56,8 @@ class _Model(BaseModel):
 
 
 class AppSettings(_Model):
-    timezone: str = "Europe/Madrid"
+    #: "local" is this Mac's own timezone; a named zone pins the clock instead.
+    timezone: str = "local"
     base_currency: str = "EUR"
     privacy_mode: bool = False
     mouse: bool = True

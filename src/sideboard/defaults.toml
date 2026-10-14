@@ -14,7 +14,8 @@ config_version = 1
 
 [app]
 # Display preference only. It is never used to guess a location.
-timezone = "Europe/Vilnius"
+# "local" shows this Mac's own clock. Name a zone (e.g. "Europe/Vilnius") to pin it.
+timezone = "local"
 base_currency = "EUR"
 privacy_mode = false
 mouse = true

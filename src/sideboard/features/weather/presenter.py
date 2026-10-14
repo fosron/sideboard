@@ -118,7 +118,10 @@ def present(request: PresentInput) -> ViewModel:
         title=title,
         subtitle=_subtitle(payload, zone),
         metrics=_compact_metrics(payload),
-        footnote=_footnote(payload, zone),
+        # Attribution, model honesty and forecast validity are on the detail view: the
+        # card is a glance at the weather, and "model-derived forecast · Open-Meteo ·
+        # valid until 14:31" under two rows of numbers is not part of it.
+        footnote=None,
         privacy=Privacy.PUBLIC,
     )
 

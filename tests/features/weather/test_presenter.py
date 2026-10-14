@@ -74,8 +74,19 @@ def test_compact_reports_the_core_metrics(sample_payload, make_envelope) -> None
     assert metrics["rain_chance_6h"].value_text == "35"
     assert all(metric.privacy is Privacy.PUBLIC for metric in view.metrics)
     assert all(metric.basis in {"forecast", "hourly forecast"} for metric in view.metrics)
-    assert "Open-Meteo" in (view.footnote or "")
-    assert "model-derived" in (view.footnote or "")
+    # Attribution and forecast validity are on the detail view, not on the card.
+    assert view.footnote is None
+    detail = present(
+        PresentInput(
+            settings=WeatherWidgetSettings(),
+            inputs={"primary": make_envelope(sample_payload)},
+            context=ViewContext(
+                now=datetime(2026, 10, 13, 12, 0, tzinfo=UTC), mode=ViewMode.DETAIL
+            ),
+        )
+    )
+    assert "Open-Meteo" in (detail.footnote or "")
+    assert "model-derived" in (detail.footnote or "")
 
 
 def test_missing_rain_stays_unavailable_not_zero(sample_payload, make_envelope) -> None:

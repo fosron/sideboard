@@ -7,13 +7,15 @@ drive rotation, freshness and scheduling deterministically.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta, timezone
+from pathlib import Path
 from typing import Protocol
 from zoneinfo import ZoneInfo
 
-__all__ = ["Clock", "FakeClock", "SystemClock", "display_timezone"]
+__all__ = ["Clock", "FakeClock", "SystemClock", "display_timezone", "system_timezone_name"]
 
 
 class Clock(Protocol):
@@ -90,8 +92,29 @@ class FakeClock:
             self._monotonic += delta
 
 
+def system_timezone_name() -> str:
+    """This Mac's own timezone name.
+
+    macOS keeps ``/etc/localtime`` as a symlink into the zoneinfo database, so the name is
+    there to read rather than to guess from an offset. UTC is the fallback: a clock that is
+    obviously UTC beats one that is confidently an hour wrong.
+    """
+    for candidate in (Path("/etc/localtime"), Path("/var/db/timezone/localtime")):
+        with contextlib.suppress(OSError):
+            target = str(candidate.readlink())
+            if "zoneinfo/" in target:
+                return target.split("zoneinfo/", 1)[1]
+    return "UTC"
+
+
 def display_timezone(name: str) -> ZoneInfo:
-    """Resolve an IANA timezone name, defaulting to UTC for unknown input."""
+    """Resolve a display timezone. ``local`` (or empty) means this Mac's own zone.
+
+    A dashboard on a desk should show the clock in the room. ``app.timezone = "local"``
+    is that; naming a zone is for the case where it should not.
+    """
+    if not name or name.strip().lower() in {"local", "system"}:
+        name = system_timezone_name()
     try:
         return ZoneInfo(name)
     except Exception:  # pragma: no cover - tzdata always ships on macOS
