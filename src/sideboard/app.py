@@ -1038,9 +1038,12 @@ class SideboardApp(App[None]):
 
     def action_open_url(self) -> None:
         card = self.focused_card()
-        url = card.selected_url() if card is not None else None
+        if card is None:
+            self.notify("Focus a card first: the arrow keys walk the cards")
+            return
+        url = card.selected_url()
         if not url:
-            self.notify("No link selected")
+            self.notify("No link on the selected row")
             return
         self.open_validated_url(url)
 

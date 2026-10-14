@@ -149,7 +149,10 @@ def render_items(
         # card were a wrapped fragment with a stray "age 2h" on the line below.
         room = max(12, width - 4)  # cursor and saved marker
         if meta_text:
-            meta_text = single_line(meta_text, max(8, room // 3))
+            # Half the row at most for the stats: enough for "pts 225 · c 81 · age 3h" on a
+            # half-width card, while the headline keeps the rest. A third cut the age off
+            # the end of the stats, which is the one part a reader scans for.
+            meta_text = single_line(meta_text, max(8, room // 2))
             room -= len(meta_text) + 2
         title_room = max(12, room - len(badge))
         line.append(single_line(raw.title, title_room), style=style)
