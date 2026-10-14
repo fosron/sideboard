@@ -10,6 +10,8 @@ keeps running the previous valid configuration if validation fails.
 
 from __future__ import annotations
 
+import contextlib
+import re
 import tomllib
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -30,6 +32,7 @@ from .contracts import (
 from .errors import ConfigError
 from .paths import Paths
 from .registry import Registry
+from .storage import ensure_private_dir
 
 __all__ = [
     "AppSettings",
@@ -40,10 +43,13 @@ __all__ = [
     "SourceInstance",
     "WidgetInstance",
     "config_from_document",
+    "document_from_text",
     "load_config_file",
     "merge_documents",
     "render_default_config",
     "resolve_config",
+    "set_config_value",
+    "write_config_text",
 ]
 
 DEFAULT_CONFIG_TEXT_PATH = Path(__file__).resolve().parent.parent / "defaults.toml"
@@ -291,6 +297,74 @@ def merge_documents(
         else:
             out[key] = value
     return out
+
+
+#: A key line inside a table: indentation, the key, ``=``, then whatever follows.
+_KEY_LINE = re.compile(r"^(?P<indent>\s*)(?P<key>[A-Za-z0-9_-]+)(?P<sep>\s*=\s*)(?P<value>.*)$")
+
+
+def set_config_value(text: str, *, table: str, key: str, value: str) -> str:
+    """Set one value in a hand-written configuration file, preserving everything else.
+
+    The file belongs to the user: it has their comments, their ordering and their
+    spacing. Re-rendering it from a template would throw all of that away, so this edits
+    the one line and leaves the rest byte-identical. A trailing comment on that line
+    survives too.
+
+    The table header must match exactly (``[app]``), so a value is never written into a
+    similarly named table.
+    """
+    lines = text.splitlines(keepends=True)
+    header = f"[{table}]"
+    start: int | None = None
+    end = len(lines)
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped == header and not stripped.startswith("#"):
+            start = index
+            continue
+        if start is not None and stripped.startswith("[") and stripped.endswith("]"):
+            end = index
+            break
+    assignment = f'{key} = "{value}"'
+    if start is None:
+        # No such table: append one. Only reached for a file that never had the key.
+        body = text if text.endswith("\n") else text + "\n"
+        return f"{body}\n{header}\n{assignment}\n"
+    for index in range(start + 1, end):
+        match = _KEY_LINE.match(lines[index].rstrip("\n"))
+        if match is None or match.group("key") != key:
+            continue
+        tail = match.group("value")
+        comment = ""
+        if tail.startswith('"'):
+            closing = tail.find('"', 1)
+            if closing != -1:
+                comment = tail[closing + 1 :]
+        lines[index] = f"{match.group('indent')}{assignment}{comment}\n"
+        return "".join(lines)
+    # The table exists without the key: put it first, where it is easy to find.
+    lines.insert(start + 1, f"{assignment}\n")
+    return "".join(lines)
+
+
+def document_from_text(text: str) -> RootDocument:
+    """Parse configuration text that has not been written to disk yet."""
+    return config_from_document(tomllib.loads(text))
+
+
+def write_config_text(path: Path, text: str) -> None:
+    """Replace the configuration file atomically, keeping owner-only permissions.
+
+    A half-written file is a configuration the next start cannot read, so the new text is
+    written beside the original and renamed into place.
+    """
+    ensure_private_dir(path.parent)
+    temporary = path.with_name(f".{path.name}.tmp")
+    temporary.write_text(text, encoding="utf-8")
+    with contextlib.suppress(OSError):
+        temporary.chmod(0o600)
+    temporary.replace(path)
 
 
 def load_toml(path: Path) -> dict[str, Any]:

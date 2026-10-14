@@ -97,7 +97,13 @@ def test_the_default_palette_is_the_documented_one() -> None:
     assert resolve_palette("").label == PALETTES[DEFAULT_PALETTE].label
 
 
-async def make_app(tmp_path: Path, *, theme: str = "sideboard", colours: dict | None = None):
+async def make_app(
+    tmp_path: Path,
+    *,
+    theme: str = "sideboard",
+    colours: dict | None = None,
+    config_text: str | None = None,
+):
     paths = default_paths(
         home=tmp_path,
         config_file=tmp_path / "config" / "config.toml",
@@ -105,6 +111,8 @@ async def make_app(tmp_path: Path, *, theme: str = "sideboard", colours: dict | 
         log_dir=tmp_path / "logs",
     )
     paths.config_file.parent.mkdir(parents=True, exist_ok=True)
+    if config_text is not None:
+        paths.config_file.write_text(config_text, encoding="utf-8")
     runtime = await build_runtime(paths=paths, demo=True)
     if theme != "sideboard" or colours:
         from dataclasses import replace
@@ -218,37 +226,63 @@ async def test_a_palette_change_on_reload_recolours_without_a_restart(tmp_path: 
     await app.runtime.database.aclose()
 
 
-async def test_t_cycles_palettes_for_the_session_only(tmp_path: Path) -> None:
-    """Switching in the app must not rewrite the configuration.
+def shipped_config_with_a_comment() -> str:
+    """A configuration file as a human would leave it: shipped text plus their notes."""
+    from sideboard.core.config import render_default_config
+    from sideboard.features import build_feature_registry
 
-    The palette is a session choice until the user decides otherwise, so the file they
-    maintain by hand stays exactly as they wrote it.
-    """
-    app = await make_app(tmp_path, theme="sideboard")
+    text = render_default_config(build_feature_registry())
+    return text.replace(
+        "[app]",
+        "# my own note: this file is hand-maintained\n[app]",
+        1,
+    )
+
+
+async def test_switching_a_palette_writes_it_to_the_configuration(tmp_path: Path) -> None:
+    """A switch is kept, and the file stays the user's: one line changes, nothing else."""
+    before = shipped_config_with_a_comment()
+    app = await make_app(tmp_path, theme="sideboard", config_text=before)
     config_file = app.runtime.paths.config_file
-    before = config_file.read_text(encoding="utf-8") if config_file.exists() else ""
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
-        first = app.theme
         await pilot.press("t")
         await pilot.pause()
-        second = app.theme
-        assert second != first, "t must switch palette"
-        assert app._session_theme == second
-        style = app.console.get_style("sb-dim", default=None)
-        assert style is not None and style.color is not None
-        assert style.color.get_truecolor().hex.lower() == PALETTES[second].dim
+        chosen = app._session_theme
+        assert chosen and chosen != "sideboard"
 
-        # Wrapping: one full cycle of presses returns to where it started.
-        from sideboard.ui.palettes import palette_names
+        after = config_file.read_text(encoding="utf-8")
+        assert f'theme = "{chosen}"' in after
+        assert "# my own note: this file is hand-maintained" in after, "comments survive"
+        # Exactly one line differs: the theme.
+        changed = [
+            (old_line, new_line)
+            for old_line, new_line in zip(before.splitlines(), after.splitlines(), strict=True)
+            if old_line != new_line
+        ]
+        assert len(changed) == 1, changed
+        assert changed[0][1].strip() == f'theme = "{chosen}"'
 
-        for _ in range(len(palette_names()) - 1):
-            await pilot.press("t")
-            await pilot.pause()
-        assert app._session_theme == "sideboard", "the cycle wraps around the list"
+        # The running configuration agrees, so a reload does not revert the choice.
+        assert app.runtime.config.app.theme == chosen
+        await app._reload_config()
+        await pilot.pause()
+        assert app.theme == chosen
+    await app.runtime.database.aclose()
 
-        after = config_file.read_text(encoding="utf-8") if config_file.exists() else ""
-        assert after == before, "a session switch must not touch the configuration file"
+
+async def test_a_switch_without_a_configuration_file_says_so(tmp_path: Path) -> None:
+    """No file to edit: the palette still applies, and nothing is invented."""
+    app = await make_app(tmp_path, theme="sideboard")
+    config_file = app.runtime.paths.config_file
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        await pilot.press("t")
+        await pilot.pause()
+        assert app.theme != "sideboard", "the switch still applies"
+        notices = [str(note.message) for note in app._notifications]
+        assert any("no configuration file to edit" in note for note in notices), notices
+        assert not config_file.exists(), "a file with only a theme would break the next start"
     await app.runtime.database.aclose()
 
 
@@ -280,7 +314,7 @@ async def test_ctrl_t_opens_a_picker_that_applies_a_palette(tmp_path: Path) -> N
 
 
 async def test_the_command_palette_can_switch_palettes_too(tmp_path: Path) -> None:
-    app = await make_app(tmp_path, theme="sideboard")
+    app = await make_app(tmp_path, theme="sideboard", config_text=shipped_config_with_a_comment())
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
         commands = dict(app._palette_commands())
@@ -288,6 +322,7 @@ async def test_the_command_palette_can_switch_palettes_too(tmp_path: Path) -> No
         app._run_command("theme:gruvbox")
         await pilot.pause()
         assert app.theme == "gruvbox"
+        assert app.runtime.config.app.theme == "gruvbox"
         # An unknown palette is reported, not applied.
         app._run_command("theme:no-such-palette")
         await pilot.pause()

@@ -215,7 +215,7 @@ class HelpScreen(ModalScreen[None]):
         ("r", "request a rate-limited refresh of the selected provider"),
         ("v", "privacy mode: hide amounts and private identifiers"),
         ("Ctrl+Y", "release every hold"),
-        ("t / Ctrl+T", "next colour palette / pick one (session only)"),
+        ("t / Ctrl+T", "next colour palette / pick one (kept in the configuration)"),
         ("Ctrl+P", "command palette: any tab, any widget, any action"),
         ("Ctrl+R", "validate and reload configuration"),
         ("?", "this help"),
@@ -302,10 +302,10 @@ class CommandPaletteScreen(ModalScreen[None]):
 
 
 class ThemePickerScreen(ModalScreen[None]):
-    """Ctrl+T: pick a palette for this session.
+    """Ctrl+T: pick a palette.
 
-    Session-only on purpose: the configuration keeps the default, so trying a palette
-    cannot silently rewrite the file the user maintains by hand.
+    Choosing one applies it and writes ``app.theme`` into the configuration, editing that
+    single line so the comments around it survive.
     """
 
     BINDINGS = [Binding("escape", "dismiss_screen", "close")]
@@ -329,9 +329,9 @@ class ThemePickerScreen(ModalScreen[None]):
         self.query_one("#sb-help", VerticalScroll).mount(
             Static(
                 Text(
-                    "This lasts until Sideboard restarts and never writes the "
-                    "configuration.\nSet app.theme in the configuration to keep a "
-                    "palette.\n",
+                    "Choosing a palette applies it now and writes app.theme into the "
+                    "configuration,\nediting that one line and leaving your comments "
+                    "alone.\n",
                     style=DIM,
                 ),
                 id="sb-theme-note",

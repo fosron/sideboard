@@ -9,6 +9,7 @@ queues are configuration entries.
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import logging
 import subprocess
 import sys
@@ -30,10 +31,13 @@ from .core.config import (
     AppSettings,
     ResolvedConfig,
     config_from_document,
+    document_from_text,
     load_toml,
     merge_documents,
     resolve_config,
+    set_config_value,
     shipped_defaults,
+    write_config_text,
 )
 from .core.contracts import (
     Item,
@@ -1253,11 +1257,12 @@ class SideboardApp(App[None]):
         self._apply_palette(self.runtime.config.app, push_rich=True)
 
     def _set_theme(self, key: str) -> None:
-        """Switch palette for this session. Never writes the configuration.
+        """Switch palette, and keep it: the choice is written to the configuration.
 
         Both halves are rebuilt (Textual CSS variables and the Rich theme on the console),
         then the screen is repainted: the renderers hold style *names*, so a repaint is
-        enough to recolour every card.
+        enough to recolour every card. The configuration is edited in place, one line, so
+        the comments around it survive.
         """
         try:
             palette = resolve_palette(key)
@@ -1275,7 +1280,59 @@ class SideboardApp(App[None]):
         self._rich_theme_pushed = True
         self.refresh_css(animate=False)
         self._present_everything()
-        self.notify(f"{palette.label} — session only; set app.theme to keep it")
+        problem = self._save_theme_to_config(self._session_theme)
+        if problem is None:
+            self.notify(f"{palette.label} — saved to the configuration")
+        else:
+            # The switch still applies; only keeping it failed, and that is worth saying.
+            self.notify(
+                f"{palette.label} — could not save it: {problem}",
+                severity="warning",
+                timeout=12,
+            )
+
+    def _save_theme_to_config(self, key: str) -> str | None:
+        """Write ``app.theme`` into the configuration file. Returns an error, or None.
+
+        The edited document is parsed and resolved before it replaces the working file: a
+        dashboard must never leave behind a configuration it cannot read. The running
+        configuration is updated in memory too, so the file and the application agree and
+        a later reload does not revert the choice.
+        """
+        path = self.runtime.paths.config_file
+        try:
+            text = path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            # Creating one here would write a file containing only this line, and the next
+            # start would come up with no tabs at all. Refuse, and say what to do.
+            return "there is no configuration file to edit; run `uv run sideboard init`"
+        except OSError as error:
+            return f"{type(error).__name__}: {error}"
+        updated = set_config_value(text, table="app", key="theme", value=key)
+        if updated == text:
+            return None
+        try:
+            document = document_from_text(updated)
+            resolve_config(
+                document,
+                self.runtime.registry,
+                paths=self.runtime.paths,
+                offline=self.offline,
+                demo=self.demo,
+                revision=self.runtime.config.revision,
+            )
+        except Exception as error:
+            return f"the edited configuration was rejected ({error})"
+        try:
+            write_config_text(path, updated)
+        except OSError as error:
+            return f"{type(error).__name__}: {error}"
+        self.runtime.config = dataclasses.replace(
+            self.runtime.config,
+            app=self.runtime.config.app.model_copy(update={"theme": key}),
+        )
+        log.info("palette %s written to %s", key, path)
+        return None
 
     def action_next_theme(self) -> None:
         """t: the next palette in the list, wrapping."""

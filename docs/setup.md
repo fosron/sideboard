@@ -107,7 +107,7 @@ reference on screen. The tabs are the first row, so the cards get the rest of th
 | Input | Action |
 |---|---|
 | `1`–`9` | select the first nine visible tabs, in configured order |
-| `t` / `Ctrl+T` | next colour palette / pick one (session only; the config is untouched) |
+| `t` / `Ctrl+T` | next colour palette / pick one (written to `app.theme`) |
 | `Ctrl+P` | palette: any tab, any widget, any palette, and the application actions |
 | `Ctrl+R` | validate and reload configuration; an invalid update keeps the running one |
 | `Tab` / `Shift+Tab` | next / previous card of the visible tab, wrapping |
@@ -195,10 +195,13 @@ theme = "catppuccin-mocha"
 `uv run sideboard themes list` prints the same list, and `uv run sideboard themes show
 <name>` prints every colour of one palette.
 
-**Switching in the app is session-only.** `t` moves to the next palette, `Ctrl+T` opens a
-picker, and `Ctrl+P` lists them as commands. None of these writes the configuration — the
-file stays exactly as you wrote it — so trying palettes cannot change your default. A
-reload (`Ctrl+R`) returns to the configured palette.
+**Switching in the app keeps the choice.** `t` moves to the next palette, `Ctrl+T` opens a
+picker, and `Ctrl+P` lists them as commands. A switch applies immediately *and* writes
+`app.theme` into the configuration — that one line, edited in place, so your comments,
+ordering and every other setting survive untouched. The edited file is parsed and
+resolved before it replaces the working one, so a dashboard never leaves behind a
+configuration it cannot read; if the file cannot be written (or does not exist yet), the
+palette still applies for the session and a notification says what failed.
 
 Any single colour can be adjusted without leaving the palette — the token names are the
 palette's own field names (`background`, `surface`, `panel`, `boost`, `foreground`,
