@@ -17,6 +17,11 @@ config_version = 1
 # "local" shows this Mac's own clock. Name a zone (e.g. "Europe/Vilnius") to pin it.
 timezone = "local"
 base_currency = "EUR"
+# Colour palette: `sideboard themes list` names them all, `themes show <name>` prints
+# every token. Individual colours can be adjusted without leaving the palette:
+#   [app.theme_colors]
+#   dim = "#8a95a1"
+theme = "sideboard"
 privacy_mode = false
 mouse = true
 compact_threshold_columns = 70

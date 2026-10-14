@@ -1,49 +1,112 @@
-"""Semantic theme tokens for Sideboard.
+"""Themes built from a palette.
 
-Dark, restrained, thin borders, generous whitespace. No feature-specific colours:
-a feature may only use the semantic styles declared here.
+Two themes come out of one palette, and both are needed:
+
+* a Textual :class:`Theme`, whose variables the stylesheet resolves (``$sb-dim``,
+  ``$panel``, ``$surface`` …);
+* a Rich :class:`Theme`, pushed on the application console, which is what makes
+  ``Text(style="sb-dim")`` resolve at *render* time. Rich cannot read Textual's CSS
+  variables, so the same names are registered for it separately. That indirection is the
+  reason a palette change recolours the card text as well as the borders.
 """
 
 from __future__ import annotations
 
+from rich.theme import Theme as RichTheme
 from textual.theme import Theme
 
-__all__ = ["SIDEBOARD_THEME", "THEME_NAME"]
+from .palettes import DEFAULT_PALETTE, Palette, canonical_name, resolve_palette
 
-THEME_NAME = "sideboard-dark"
+__all__ = [
+    "SIDEBOARD_THEME",
+    "THEME_NAME",
+    "build_rich_theme",
+    "build_theme",
+    "theme_name",
+]
 
-SIDEBOARD_THEME = Theme(
-    name=THEME_NAME,
-    dark=True,
-    primary="#7aa2c8",
-    secondary="#6d7f8f",
-    accent="#a8b6c4",
-    foreground="#cfd6dd",
-    background="#12161a",
-    surface="#171c21",
-    panel="#1d2329",
-    success="#7fae7a",
-    warning="#d8b26a",
-    error="#cf7b7b",
-    boost="#20272e",
-    luminosity_spread=0.12,
-    text_alpha=0.92,
-    variables={
-        "sb-dim": "#7e8a95",
-        "sb-value": "#e2e7ec",
-        "sb-ok": "#7fae7a",
-        "sb-info": "#8fa8bd",
-        "sb-warn": "#d8b26a",
-        "sb-error": "#cf7b7b",
-        "sb-item": "#cfd6dd",
-        "sb-read": "#6f7a84",
-        "sb-border": "#2a323a",
-        "sb-border-focus": "#7aa2c8",
-        "sb-held": "#d8b26a",
-        # Focus has to be unmistakable: a card that merely received the pointer, or is
-        # pinned, used the same colour, so a walk with Tab left every card looking alike.
-        "sb-focus": "#a9cdf2",
-        "sb-focus-bg": "#1e2833",
-        "sb-border-held": "#4c5866",
-    },
+#: The Rich style names the renderer layer uses. Kept in one place so a palette cannot
+#: miss one without failing the completeness test.
+RICH_TOKENS: tuple[str, ...] = (
+    "sb-dim",
+    "sb-value",
+    "sb-ok",
+    "sb-info",
+    "sb-warn",
+    "sb-error",
+    "sb-item",
+    "sb-read",
+    "sb-border",
+    "sb-border-focus",
+    "sb-held",
 )
+
+
+def theme_name(key: str) -> str:
+    """The Textual theme name for a palette key. Stable, so a reload can reuse it."""
+    return canonical_name(key)
+
+
+def build_theme(palette: Palette, *, key: str) -> Theme:
+    """The Textual theme: chrome colours plus the ``sb-*`` CSS variables."""
+    return Theme(
+        name=theme_name(key),
+        dark=True,
+        primary=palette.primary,
+        secondary=palette.secondary,
+        accent=palette.accent,
+        foreground=palette.foreground,
+        background=palette.background,
+        surface=palette.surface,
+        panel=palette.panel,
+        success=palette.ok,
+        warning=palette.warn,
+        error=palette.error,
+        boost=palette.boost,
+        luminosity_spread=0.12,
+        text_alpha=0.92,
+        variables={
+            "sb-dim": palette.dim,
+            "sb-value": palette.value,
+            "sb-ok": palette.ok,
+            "sb-info": palette.info,
+            "sb-warn": palette.warn,
+            "sb-error": palette.error,
+            "sb-item": palette.item,
+            "sb-read": palette.read,
+            "sb-border": palette.border,
+            "sb-border-focus": palette.border_focus,
+            "sb-held": palette.held,
+            "sb-focus": palette.focus,
+            "sb-focus-bg": palette.focus_bg,
+            "sb-border-held": palette.border_held,
+        },
+    )
+
+
+def build_rich_theme(palette: Palette) -> RichTheme:
+    """The Rich theme for the card and renderer layer.
+
+    ``sb-value`` is the tone for numbers that should stand out and ``sb-item`` the ordinary
+    list-entry tone: a palette may make them differ, and the default one does.
+    """
+    return RichTheme(
+        {
+            "sb-dim": palette.dim,
+            "sb-value": palette.value,
+            "sb-ok": palette.ok,
+            "sb-info": palette.info,
+            "sb-warn": palette.warn,
+            "sb-error": palette.error,
+            "sb-item": palette.item,
+            "sb-read": palette.read,
+            "sb-border": palette.border,
+            "sb-border-focus": palette.border_focus,
+            "sb-held": palette.held,
+        }
+    )
+
+
+#: Kept for the default case; the application builds from configuration instead.
+THEME_NAME = theme_name(DEFAULT_PALETTE)
+SIDEBOARD_THEME = build_theme(resolve_palette(DEFAULT_PALETTE), key=DEFAULT_PALETTE)

@@ -89,6 +89,12 @@ def _build_parser() -> argparse.ArgumentParser:
     listing = features_sub.add_parser("list", help="list source and widget types")
     listing.add_argument("--json", action="store_true")
 
+    themes = sub.add_parser("themes", help="colour palettes and their override tokens")
+    themes_sub = themes.add_subparsers(dest="themes_command")
+    _SUB_PARSERS["themes"] = themes_sub
+    themes_sub.add_parser("list", help="list palettes, or show one palette's tokens")
+    themes_sub.add_parser("show", help="every token of one palette").add_argument("name")
+
     import_cmd = sub.add_parser("import", help="preview, then commit a local file import")
     import_sub = import_cmd.add_subparsers(dest="import_kind")
     _SUB_PARSERS["import"] = import_sub
@@ -179,6 +185,40 @@ def cmd_config_validate(args: argparse.Namespace, paths: Paths) -> int:
         for source_id, instance in resolved.sources.items():
             state = "enabled" if instance.enabled else "disabled"
             print(f"  source {source_id:<16} {instance.type_id:<24} {state}")
+    return 0
+
+
+def cmd_themes_list(_args: argparse.Namespace) -> int:
+    """Palette names, and the tokens a configuration may override."""
+    from .ui.palettes import DEFAULT_PALETTE, OVERRIDABLE, PALETTES
+
+    print('Colour palettes (app.theme = "<name>")\n')
+    for key in sorted(PALETTES):
+        marker = " (default)" if key == DEFAULT_PALETTE else ""
+        print(f"  {key:<18}{PALETTES[key].label}{marker}")
+    print("\nAny colour can be overridden without leaving the palette:")
+    print("  [app.theme_colors]")
+    print('  dim = "#8a95a1"')
+    print(f"\nOverridable tokens: {', '.join(OVERRIDABLE)}")
+    print("`sideboard themes show <name>` prints every token of one palette.")
+    return 0
+
+
+def cmd_themes_show(args: argparse.Namespace) -> int:
+    from dataclasses import asdict
+
+    from .ui.palettes import OVERRIDABLE, PALETTES, resolve_palette
+
+    try:
+        palette = resolve_palette(args.name)
+    except ValueError as error:
+        print(f"configuration error: {error}", file=sys.stderr)
+        return 2
+    values = asdict(palette)
+    print(f"{args.name}: {palette.label}\n")
+    for token in OVERRIDABLE:
+        print(f"  {token:<16}{values[token]}")
+    _ = PALETTES
     return 0
 
 
@@ -621,6 +661,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             if args.features_command == "list":
                 return cmd_features_list(args, paths)
             _print_sub_help("features")
+            return 2
+        if args.command == "themes":
+            if args.themes_command == "list":
+                return cmd_themes_list(args)
+            if args.themes_command == "show":
+                return cmd_themes_show(args)
+            _print_sub_help("themes")
             return 2
         if args.command == "doctor":
             return cmd_doctor(args, paths)

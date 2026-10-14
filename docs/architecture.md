@@ -49,7 +49,9 @@ ui/overview.py + ui/rotation.py ── responsive slots and the rotation state m
 | `ui/overview.py` | responsive slot layouts; narrowing merges queues and never drops a widget |
 | `ui/renderers/` | metric, item, table, status and sparkline renderers built from `rich.text.Text` — no markup parsing, so untrusted content cannot inject style |
 | `ui/shell.py` `DetailPane.apply_heights` | explicit per-card heights for detail and stack tabs: an estimate from the view model, floored and capped, inside a scrollable pane. Neither `1fr` (slices every card) nor `auto` (fills the viewport with one card) works for a Rich `Group` |
-| `ui/styles.py` | the only place a Rich-rendered colour is chosen. Textual CSS variables are *not* Rich style names |
+| `ui/palettes.py` | the named colour palettes, and the only place a colour is chosen |
+| `ui/theme.py` | one palette, two themes: Textual CSS variables (`$sb-dim`, `$panel`) *and* a Rich theme pushed on the console. Textual CSS variables are not Rich style names, and the card renderers pass Rich the same token names |
+| `ui/styles.py` | the token names the renderer layer uses (`"sb-dim"`, …), resolved by Rich at paint time, so a palette change recolours card text as well as the chrome |
 | `ui/screens.py` | detail, help, palette and mouse-diagnostic modals |
 | `app.py` | composition root and orchestration: tabs, presentation, holds, item state, URL validation, configuration reload. No feature-specific branch |
 | `cli.py` | `init`, `doctor`, `config validate`, `features list`, `import …`, and the launch modes |

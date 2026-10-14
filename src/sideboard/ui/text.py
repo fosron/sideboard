@@ -10,7 +10,6 @@ from __future__ import annotations
 import re
 import unicodedata
 
-from rich.style import Style
 from rich.text import Text
 
 from ..core.contracts import Item, Privacy, Severity
@@ -29,7 +28,8 @@ __all__ = [
 
 MASK = "••••"
 
-SEVERITY_STYLE: dict[Severity, Style] = {
+#: Style *names* (resolved by Rich against the palette registered on the console).
+SEVERITY_STYLE: dict[Severity, str] = {
     Severity.OK: OK,
     Severity.INFO: INFO,
     Severity.WARNING: WARN,

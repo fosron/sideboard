@@ -59,6 +59,12 @@ class AppSettings(_Model):
     #: "local" is this Mac's own timezone; a named zone pins the clock instead.
     timezone: str = "local"
     base_currency: str = "EUR"
+    #: Colour palette name (`sideboard themes list`). An unknown name is rejected at
+    #: resolve time rather than silently rendering the default palette.
+    theme: str = "sideboard"
+    #: Per-token colour overrides as #rrggbb, keyed by palette field name
+    #: (background, dim, ok, focus_bg, …): one palette, adjusted.
+    theme_colors: dict[str, str] = Field(default_factory=dict)
     privacy_mode: bool = False
     mouse: bool = True
     compact_threshold_columns: int = 70
@@ -356,6 +362,22 @@ def _check_private_fields(document: RootDocument) -> None:
         raise ConfigError("configuration contains credential-like values", problems)
 
 
+def _theme_problems(app: AppSettings) -> list[str]:
+    """Check the palette name and every override before anything is registered.
+
+    Imported inside the function on purpose: the palette table lives in the UI layer, and
+    core configuration must not import it at module load.
+    """
+    from ..ui.palettes import palette_names, resolve_palette
+
+    try:
+        resolve_palette(app.theme, app.theme_colors)
+    except ValueError as error:
+        return [f"app.theme: {error}"]
+    _ = palette_names
+    return []
+
+
 def resolve_config(
     document: RootDocument,
     registry: Registry,
@@ -367,6 +389,7 @@ def resolve_config(
 ) -> ResolvedConfig:
     """Cross-reference and type-check every registered reference. Raises ConfigError."""
     problems: list[str] = []
+    problems.extend(_theme_problems(document.app))
 
     # ---- categories
     categories: dict[str, CategoryConfig] = {}

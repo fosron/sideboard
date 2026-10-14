@@ -166,7 +166,61 @@ A card is always laid out with a usable height:
 
 If a card looks too small, press `Enter` on it: the detail view uses the whole window.
 
-## 5. Sizes
+## 5. Colour palettes
+
+`app.theme` names the palette; the default is `sideboard`, the restrained dark theme the
+dashboard has always used. Eleven ship with it, taken from the palettes their authors
+publish:
+
+| `app.theme` | Palette |
+|---|---|
+| `sideboard` | the default: low chroma, thin borders |
+| `catppuccin-mocha` | [Catppuccin](https://catppuccin.com/palette) Mocha |
+| `tokyo-night` | [Tokyo Night](https://github.com/folke/tokyonight.nvim) |
+| `nord` | [Nord](https://www.nordtheme.com) |
+| `gruvbox` | [Gruvbox](https://github.com/morhetz/gruvbox) dark |
+| `dracula` | [Dracula](https://draculatheme.com) |
+| `one-dark` | [One Dark](https://github.com/atom/one-dark-syntax) |
+| `solarized-dark` | [Solarized](https://ethanschoonover.com/solarized) dark |
+| `rose-pine` | [Rosé Pine](https://rosepinetheme.com) |
+| `kanagawa` | [Kanagawa](https://github.com/rebelot/kanagawa.nvim) |
+| `everforest` | [Everforest](https://github.com/sainnhe/everforest) |
+
+```toml
+[app]
+theme = "catppuccin-mocha"
+```
+
+`uv run sideboard themes list` prints the same list, and `uv run sideboard themes show
+<name>` prints every colour of one palette.
+
+Any single colour can be adjusted without leaving the palette — the token names are the
+palette's own field names (`background`, `surface`, `panel`, `boost`, `foreground`,
+`value`, `accent`, `primary`, `secondary`, `ok`, `info`, `warn`, `error`, `dim`, `item`,
+`read`, `border`, `border_focus`, `focus`, `focus_bg`, `held`, `border_held`):
+
+```toml
+[app]
+theme = "nord"
+
+[app.theme_colors]
+focus_bg = "#123456"
+dim = "#8a95a1"
+```
+
+Rules the implementation holds to:
+
+* one palette drives **both** the Textual theme (borders, chrome, backgrounds) and the Rich
+  theme the card renderers resolve their token names against, so a palette change
+  recolours the text as well as the frame;
+* a missing or misspelled colour is a configuration error, never a silent fallback: an
+  unknown palette name or token is rejected by `config validate` with the valid names;
+* a palette must define every token — a test asserts it, because a missing one would
+  surface as a `MissingStyle` error in the middle of a repaint;
+* no feature chooses a colour: features render through the shared token names, so every
+  palette applies to every card, including features added later.
+
+## 6. Sizes
 
 Measured in terminal columns and rows.
 
@@ -180,7 +234,7 @@ Measured in terminal columns and rows.
 Resizing preserves selection, read state and pins. The other tabs stack, grid or
 filter, and keep working as the window shrinks.
 
-## 6. Configuration reload
+## 7. Configuration reload
 
 `Ctrl+R` (or `uv run sideboard config validate` then reload) parses and validates a
 candidate configuration completely before applying it. Only changed source instances
@@ -191,7 +245,7 @@ feature code does need a normal restart** — there is no hot reload.
 If an update is rejected, the previous valid configuration keeps running and the
 field-level problems are shown in a notification and in the log.
 
-## 7. Recovery
+## 8. Recovery
 
 | Symptom | What to do |
 |---|---|
@@ -207,7 +261,7 @@ field-level problems are shown in a notification and in the log.
 | The app misbehaves after editing code | restart the process; Python changes are not hot-reloaded |
 | Only the first cards of a tab are visible | that tab is taller than the window; scroll with `PgDn` or the wheel, or press `Enter` for one card full-screen |
 
-## 8. Measured behaviour
+## 9. Measured behaviour
 
 Recorded on the development Mac (macOS, Python 3.14, `TERM_PROGRAM=muxy`):
 

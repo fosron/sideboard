@@ -27,6 +27,7 @@ from textual.widgets import Static, TabbedContent, TabPane
 from .core.capabilities import CommandRunner, HttpLimits, validate_public_url
 from .core.clock import Clock, SystemClock, display_timezone
 from .core.config import (
+    AppSettings,
     ResolvedConfig,
     config_from_document,
     load_toml,
@@ -55,6 +56,7 @@ from .features import build_feature_registry
 from .ui.card import CardShell, freshness_line
 from .ui.navigation import Box, neighbour
 from .ui.overview import LayoutMode, OverviewPane, SlotSpec, layout_mode, slot_specs
+from .ui.palettes import canonical_name, resolve_palette
 from .ui.rotation import Candidate, HoldReason, RotationController
 from .ui.screens import (
     CommandPaletteScreen,
@@ -64,7 +66,7 @@ from .ui.screens import (
     PaletteCommand,
 )
 from .ui.shell import DetailPane, FilterBar
-from .ui.theme import SIDEBOARD_THEME, THEME_NAME
+from .ui.theme import build_rich_theme, build_theme
 
 log = logging.getLogger("sideboard.app")
 
@@ -205,8 +207,8 @@ class SideboardApp(App[None]):
         self.mouse_enabled = mouse
         # Register and select the theme before the stylesheet is parsed: the semantic
         # tokens ($sb-dim and friends) must exist when the CSS variables are resolved.
-        self.register_theme(SIDEBOARD_THEME)
-        self.theme = THEME_NAME
+        # The palette is configuration: the Textual half now, the Rich half in on_load.
+        self._apply_palette(runtime.config.app, push_rich=False)
         self.runtime = runtime
         self.registry = runtime.registry
         self.privacy = runtime.config.app.privacy_mode
@@ -235,6 +237,7 @@ class SideboardApp(App[None]):
         self._unsubscribe: Any = None
         self._tab_signature: tuple[str, ...] = ()
         self._pending_slot_repaints: set[str] = set()
+        self._rich_theme_pushed = False
         self._slot_repaint_timer: Any = None
 
     # ------------------------------------------------------------------ bindings
@@ -1215,6 +1218,33 @@ class SideboardApp(App[None]):
 
         self.push_screen(screen, callback=closed)
 
+    def _apply_palette(self, app_settings: AppSettings, *, push_rich: bool = True) -> None:
+        """Register and select the configured palette for Textual *and* for Rich.
+
+        Textual resolves ``$sb-*`` CSS variables; the card renderers pass the same names to
+        Rich, which cannot read those variables. Both are built from one palette here, so a
+        change in configuration recolours the card text and not just the borders.
+
+        ``push_rich`` is False during construction: Textual replaces its console when the
+        driver starts, so a Rich theme pushed that early is gone by the first render.
+        """
+        key = canonical_name(app_settings.theme)
+        palette = resolve_palette(key, app_settings.theme_colors)
+        theme = build_theme(palette, key=key)
+        self.register_theme(theme)
+        self.theme = theme.name
+        if not push_rich:
+            return
+        if self._rich_theme_pushed:
+            with contextlib.suppress(Exception):
+                self.console.pop_theme()
+        self.console.push_theme(build_rich_theme(palette))
+        self._rich_theme_pushed = True
+
+    def on_load(self) -> None:
+        """Push the Rich half of the palette once the driver's console exists."""
+        self._apply_palette(self.runtime.config.app, push_rich=True)
+
     def _terminal_name(self) -> str:
         import os
 
@@ -1348,6 +1378,10 @@ class SideboardApp(App[None]):
         # editing the file.
         self.privacy = candidate.app.privacy_mode
         await self._persist_privacy()
+        # A palette may have changed under the same theme name, which the reactive would
+        # not notice; re-parse the stylesheet either way.
+        self._apply_palette(candidate.app)
+        self.refresh_css(animate=False)
         self.timezone = candidate.app.timezone
         await self._load_item_state()
         await self._build_tabs(preserve=previous_tab)
