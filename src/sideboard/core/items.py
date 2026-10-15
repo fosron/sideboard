@@ -170,6 +170,12 @@ class ItemStore:
                 now.isoformat(),
             ),
         )
+        if saved is False:
+            # Un-saving drops the bookmark as well. The flag and the bookmark are two
+            # stores of the same fact, and leaving the row behind made the Saved card
+            # keep listing a link the reader had just removed: the flag said no, the
+            # bookmark still said yes.
+            await self.database.execute("DELETE FROM saved_links WHERE item_id = ?", (item_id,))
         return updated
 
     async def saved_items(self, *, limit: int = 100) -> tuple[ItemRecord, ...]:

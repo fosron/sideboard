@@ -83,6 +83,40 @@ async def test_provider_purge_leaves_saved_items_alone(tmp_path: Path) -> None:
         await database.aclose()
 
 
+async def test_unsaving_removes_the_bookmark_too(tmp_path: Path) -> None:
+    """The flag and the bookmark are one fact in two stores, so both must change.
+
+    Unsaving used to flip only `item_state.saved`, leaving the `saved_links` row behind.
+    A live item row hid that — the join on `saved = 1` excluded it — so the round trip
+    looked right until retention had purged the content and written the bookmark, after
+    which the Saved card kept listing a link the reader had just removed.
+    """
+    store, database = await _store(tmp_path)
+    try:
+        await store.upsert(
+            "reddit",
+            "thread",
+            [record("reddit:1", published=NOW)],
+            now=NOW,
+            retention_seconds=3600,
+        )
+        await store.set_state("reddit:1", saved=True, now=NOW)
+        await store.purge_expired(NOW + timedelta(hours=2))
+        assert [row.item_id for row in await store.saved_items()] == ["reddit:1"]
+
+        await store.set_state("reddit:1", saved=False, now=NOW + timedelta(hours=3))
+        assert await store.saved_items() == ()
+        assert await store.ids_with_state("saved") == frozenset()
+
+        # Saving it again works: the app re-upserts the record it read from the view, so
+        # the item is back in both stores.
+        await store.upsert("reddit", "thread", [record("reddit:1", published=NOW)], now=NOW)
+        await store.set_state("reddit:1", saved=True, now=NOW + timedelta(hours=4))
+        assert [row.item_id for row in await store.saved_items()] == ["reddit:1"]
+    finally:
+        await database.aclose()
+
+
 def test_downsample_preserves_gaps() -> None:
     from sideboard.core.contracts import SeriesPoint
 
