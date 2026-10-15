@@ -32,7 +32,7 @@ widget consumes owns no recurring task at all.
 | Widget type | Accepted inputs | Category | Compact view | Detail view |
 |---|---|---|---|---|
 | `weather.summary` | `primary`: weather.forecast | world | temperature with the current-weather symbol, wind, rain next 6 h | current conditions, the next hours, then the 7-day table |
-| `news.digest` | `primary`: news.feeds | world | deterministic diversity digest | per-bucket list plus feed health |
+| `news.digest` | `primary`: news.feeds | world | deterministic diversity digest, with the age of the newest story and of each row | per-bucket list with source and age, plus feed health |
 | `news.saved` | — (local state) | world | saved reading/video links | same list, longer |
 | `hackernews.list` | `primary`: hackernews.stories | software | ranked item list | up to 30 items |
 | `youtube.uploads` | `primary`: youtube.uploads | media | recent uploads, one channel per turn | per-channel problem table |

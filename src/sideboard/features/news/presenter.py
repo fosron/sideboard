@@ -124,16 +124,22 @@ def build_digest(
 
 
 def _item(
-    article: Article, *, badge: bool = True, excerpt: bool = False, source: bool = False
+    article: Article,
+    *,
+    now: datetime,
+    badge: bool = True,
+    excerpt: bool = False,
+    source: bool = False,
 ) -> Item:
     """One digest row.
 
     The badge already names the bucket, so there is no "cat <bucket>" meta line repeating
     it. The excerpt is shown only where there is room for it, and the *source* only where
     the reader is deciding whether to open the article: a digest card needs the headline,
-    the full view needs to say who published it.
+    the full view needs to say who published it. The age is always there: "updated 14:50"
+    says when the feeds were read, not how old the stories are.
     """
-    meta: list[tuple[str, str]] = []
+    meta: list[tuple[str, str]] = [("age", _age(article, now))]
     if source:
         meta.append(("source", article.source_label or article.source_id))
     return Item(
@@ -213,13 +219,29 @@ def _compact_view(
     # One count on the card. "AI 0" and "buckets 6" answered questions nobody asked at a
     # glance; both are in the detail view, where the caps and the configured buckets are
     # spelled out.
-    metrics = (
-        Metric(id="digest_size", label="items", value_text=str(len(digest)), basis="digest"),
+    newest_article = max(
+        (article for article in digest if article.published is not None),
+        key=lambda article: article.published or context.now,
+        default=None,
     )
+    metrics = [
+        Metric(id="digest_size", label="items", value_text=str(len(digest)), basis="digest"),
+    ]
+    if newest_article is not None:
+        # The one number that answers "are these the latest": the border timestamp says
+        # when the feeds were read, which is a different question.
+        metrics.append(
+            Metric(
+                id="newest",
+                label="newest",
+                value_text=_age(newest_article, context.now),
+                basis="age of the most recent story in the digest",
+            )
+        )
     return ViewModel(
         title="News",
-        metrics=metrics,
-        items=tuple(_item(article) for article in digest),
+        metrics=tuple(metrics),
+        items=tuple(_item(article, now=context.now) for article in digest),
         # No footnote on the card: "unavailable buckets" beside six readable headlines is
         # a warning about feeds the reader is not looking at. The detail view lists the
         # feeds and what each of them returned.
@@ -238,7 +260,9 @@ def _detail_view(
     for bucket in buckets:
         for article in payload.articles:
             if article.category == bucket and _fresh(article, context.now, settings.max_age_hours):
-                items.append(_item(article, badge=False, excerpt=True, source=True))
+                items.append(
+                    _item(article, now=context.now, badge=False, excerpt=True, source=True)
+                )
     metrics = [
         Metric(
             id="articles", label="articles", value_text=str(len(payload.articles)), basis="cached"

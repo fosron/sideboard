@@ -380,3 +380,53 @@ def test_a_longer_digest_fills_from_the_same_buckets() -> None:
     assert categories[0:6] == ["local", "lithuania", "europe", "world", "business", "software"]
     # The second round repeats the buckets in order rather than draining one feed.
     assert len(set(categories[6:])) >= 2
+
+
+def test_rows_carry_their_age_and_the_digest_its_newest() -> None:
+    """A reader judges freshness from the story's age, not from when the feeds were read.
+
+    The card's border timestamp says "updated 14:50", which is when the collection ran.
+    "newest 12m" is the number that answers whether these are the latest stories.
+    """
+    articles = (
+        article(1, category="local", age_hours=0, source="feed-a"),
+        article(2, category="world", age_hours=5, source="feed-b"),
+        article(3, category="business", age_hours=30, source="feed-c"),
+    )
+    payload = NewsPayload(
+        articles=articles,
+        reports=(FeedReport(feed_id="s1", label="s1"),),
+        as_of=NOW,
+        precision=Precision.INSTANT,
+    )
+    view = digest_view(payload)
+    assert [dict(item.meta).get("age") for item in view.items] == ["0m", "5h", "1d"]
+    newest = view.metric("newest")
+    assert newest is not None and newest.value_text == "0m"
+
+    # The full view keeps the source and adds the same age.
+    detail = _detail(payload)
+    first = dict(detail.items[0].meta)
+    assert first["age"] == "0m"
+    assert first["source"] == "feed-a"
+
+
+def _detail(payload: NewsPayload):
+    from sideboard.core.contracts import Connectivity, PresentInput, SourceEnvelope
+
+    return present_news(
+        PresentInput(
+            settings=NewsWidgetSettings(),
+            inputs={
+                "primary": SourceEnvelope(
+                    source_id="news",
+                    payload_schema="news.feeds",
+                    payload_schema_version=1,
+                    payload=payload,
+                    connectivity=Connectivity.OK,
+                    as_of=NOW,
+                )
+            },
+            context=ViewContext(now=NOW, mode=ViewMode.DETAIL, width=120, height=40),
+        )
+    )
