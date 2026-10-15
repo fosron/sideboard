@@ -209,3 +209,96 @@ async def test_focus_moves_the_hold_instead_of_accumulating_one(tmp_path: Path) 
         assert rotation.held("a") is False, "the card left behind must not stay held"
         assert rotation.held("b") is True, "the card in focus stays put"
     await app.runtime.database.aclose()
+
+
+async def test_the_read_subfilter_can_be_switched_without_a_mouse(tmp_path: Path) -> None:
+    """`[` and `]` walk the subfilter row, and every entry says how many rows it has.
+
+    The row could only be clicked: `Tab` walks cards by contract, so `←` and `→` never
+    reached it and four of the five Read views were unreachable from the keyboard. The
+    entries were also rendered in `sb-dim`, which the contrast audit measured at 4.4966:1
+    against the panel — below AA, and on the iPad the unselected views faded out of the
+    row, so the Saved view looked like it did not exist.
+    """
+    from sideboard.ui.shell import FilterBar
+
+    app = await make_app(tmp_path)
+    async with app.run_test(size=(150, 44)) as pilot:
+        await asyncio.sleep(1.2)
+        await pilot.press("3")
+        await pilot.pause()
+        await asyncio.sleep(0.6)
+        assert app._active_tab == "read"
+        bar = app.query_one("#sb-filter-read", FilterBar)
+        assert [filter_id for filter_id, _ in bar.filters] == [
+            "news",
+            "hn_top",
+            "hn_new",
+            "reddit",
+            "saved",
+        ]
+        # Counts come from the presented views, so the Saved view is visibly not empty
+        # once anything is saved.
+        news_card = app._detail_panes["read"].card("news")
+        assert news_card is not None and news_card.view is not None and news_card.view.items
+        await app._toggle_saved(news_card.view.items[0].id)
+        await pilot.pause()
+        assert bar.label_for("saved") == "Saved 1", bar.counts
+
+        await pilot.press("]")
+        await pilot.pause()
+        assert bar.active == "hn_top"
+        card = app._detail_panes["read"].card(bar.active)
+        assert card is not None and app.focused_card() is card, "focus follows the switch"
+        await pilot.press("[")
+        await pilot.pause()
+        assert bar.active == "news"
+        await pilot.press("[")
+        await pilot.pause()
+        assert bar.active == "saved", "backwards from the first entry wraps to the last"
+        card = app._detail_panes["read"].card("saved")
+        assert card is not None
+        assert app._detail_panes["read"].card("news") is None, "one view at a time"
+    await app.runtime.database.aclose()
+
+
+async def test_a_click_on_a_counted_entry_selects_that_entry(tmp_path: Path) -> None:
+    """The hit test measures the text that is drawn, count included.
+
+    Widths were computed from the bare label while the row drew `Saved 1`, so every entry
+    after a counted one was clickable one column short of where it appeared.
+    """
+    from sideboard.ui.shell import FilterBar
+
+    app = await make_app(tmp_path)
+    async with app.run_test(size=(150, 44)) as pilot:
+        await asyncio.sleep(1.2)
+        await pilot.press("3")
+        await pilot.pause()
+        await asyncio.sleep(0.6)
+        bar = app.query_one("#sb-filter-read", FilterBar)
+        bar.set_counts({filter_id: 9 for filter_id, _ in bar.filters})
+        await pilot.pause()
+        x = 0
+        for filter_id, _ in bar.filters:
+            if filter_id == "saved":
+                break
+            x += len(bar.label_for(filter_id)) + 3
+        await pilot.click("#sb-filter-read", offset=(x + 1, 0))
+        await pilot.pause()
+        assert bar.active == "saved", f"clicked column {x + 1} and got {bar.active}"
+    await app.runtime.database.aclose()
+
+
+async def test_the_subfilter_keys_say_so_on_a_tab_that_has_none(tmp_path: Path) -> None:
+    app = await make_app(tmp_path)
+    async with app.run_test(size=(140, 44)) as pilot:
+        await asyncio.sleep(0.8)
+        await pilot.press("6")
+        await pilot.pause()
+        assert app._active_tab == "systems"
+        await pilot.press("]")
+        await pilot.pause()
+        notices = [str(note.message) for note in app._notifications]
+        assert any("subfilter" in notice for notice in notices), notices
+    await app.runtime.database.aclose()

@@ -307,6 +307,8 @@ class SideboardApp(App[None]):
         Binding("v", "toggle_privacy", "privacy"),
         Binding("t", "next_theme", "next palette"),
         Binding("ctrl+t", "theme_picker", "palette"),
+        Binding("left_square_bracket", "filter_previous", "previous view", show=False),
+        Binding("right_square_bracket", "filter_next", "next view", show=False),
         Binding("question_mark", "help", "help"),
         Binding("ctrl+y", "reset_holds", "reset holds"),
         Binding("q", "quit", "quit"),
@@ -731,6 +733,14 @@ class SideboardApp(App[None]):
             return
         await pane.rebuild(self._tab_widgets(tab_id), tab.layout, labels=self._labels())
         self._present_detail(tab_id)
+        self._refresh_filter_counts(tab_id)
+        # The card that had focus is gone, and with it the keyboard route back into the
+        # pane: focus the view the reader just switched to.
+        for widget_id in self._tab_widgets(tab_id):
+            card = pane.card(widget_id)
+            if card is not None:
+                card.focus()
+                break
 
     def _present_everything(self) -> None:
         """Present what can be seen: the rotating Overview and the active tab."""
@@ -738,6 +748,28 @@ class SideboardApp(App[None]):
             self._present_overview()
             if self._active_tab is not None:
                 self._present_detail(self._active_tab)
+                self._refresh_filter_counts(self._active_tab)
+
+    def _refresh_filter_counts(self, tab_id: str) -> None:
+        """Put a row count on each entry of the subfilter bar.
+
+        Only the selected view has a card, so the other four would otherwise be words with
+        nothing behind them: nothing on the Read tab said the Saved view had a link in it.
+        Counting means presenting them — a source snapshot would say 155 for News where
+        the card lists 12 — which is affordable because a presenter is pure, reads an
+        envelope the scheduler already holds and touches no database.
+        """
+        bar = self._filter_bars.get(tab_id)
+        if bar is None:
+            return
+        counts: dict[str, int] = {}
+        for widget_id in self.runtime.config.widgets_for_tab(tab_id):
+            view, _ = self.present(widget_id)
+            if view is None:
+                continue
+            rows = len(view.items) or (len(view.table.rows) if view.table is not None else 0)
+            counts[widget_id] = rows
+        bar.set_counts(counts)
 
     # ------------------------------------------------------------------ ticks
 
@@ -762,6 +794,9 @@ class SideboardApp(App[None]):
             self._present_overview()
             if self._active_tab is not None:
                 self._present_detail(self._active_tab)
+                # The subfilter row counts rows, so it has to follow the data once a
+                # second like the cards do.
+                self._refresh_filter_counts(self._active_tab)
 
     async def _on_maintenance(self) -> None:
         with contextlib.suppress(Exception):
@@ -776,13 +811,17 @@ class SideboardApp(App[None]):
 
         The hints are dropped from the end when the line is too narrow — the order is by
         relevance, so `p pin` and `n next` go before `o link` does — because a footer that
-        wraps or clips is worse than a shorter one.
+        wraps or clips is worse than a shorter one. `q quit` and `? help` are not part of
+        that list: they are the two keys that work everywhere, so they survive every
+        width. They used to be appended to it, which made the narrowest window drop the
+        way out first.
         """
-        right = " · ".join([*hints, "? help"])
+        tail = ["q quit", "? help"]
+        right = " · ".join([*hints, *tail])
         width = (self.size.width or 100) - 2  # the footer's own padding
         while hints and len(left) + 2 + len(right) > width:
             hints = hints[:-1]
-            right = " · ".join([*hints, "? help"])
+            right = " · ".join([*hints, *tail])
         gap = max(1, width - len(left) - len(right))
         return f"{left}{' ' * gap}{right}"
 
@@ -794,6 +833,9 @@ class SideboardApp(App[None]):
         conditions are the same ones the actions check — this is a preview of them, not a
         second set of rules.
         """
+        focused = self.focused
+        if isinstance(focused, FilterBar):
+            return ["←→ view"]
         card = self.focused_card()
         if card is None:
             return ["Tab cards"]
@@ -802,6 +844,9 @@ class SideboardApp(App[None]):
         if card.row_count > 1:
             hints.append("↑↓ rows")
         hints.append("Enter open")
+        bar = self._filter_bars.get(self._active_tab or "")
+        if bar is not None and len(bar.filters) > 1:
+            hints.append("[ ] switch")
         if card.selected_url():
             hints.append("o link")
         if card.selected_alt_url():
@@ -842,8 +887,7 @@ class SideboardApp(App[None]):
         if self._reload_note:
             labels.append(self._reload_note)
         left = "Sideboard · " + " · ".join(labels)
-        hints = [*self._context_hints(), "q quit"]
-        line = self._compose_footer(left, hints)
+        line = self._compose_footer(left, self._context_hints())
         if force or line != self._last_footer_status:
             self._last_footer_status = line
             self._update_static("#sb-footer", line)
@@ -1267,6 +1311,26 @@ class SideboardApp(App[None]):
                         privacy=item.privacy,
                     )
         return None
+
+    def action_filter_next(self) -> None:
+        """`]`. Switch the active tab's subfilter from anywhere on the tab.
+
+        The row could only be clicked before: `Tab` walks cards, so `←` and `→` never
+        reached it, and four of the five Read views were mouse-only on a keyboard-first
+        dashboard.
+        """
+        self._shift_filter(1)
+
+    def action_filter_previous(self) -> None:
+        """`[`, the same walk backwards."""
+        self._shift_filter(-1)
+
+    def _shift_filter(self, delta: int) -> None:
+        bar = self._filter_bars.get(self._active_tab or "")
+        if bar is None or len(bar.filters) < 2:
+            self.notify("This tab has one view and no subfilter")
+            return
+        bar.shift(delta)
 
     def action_refresh_source(self) -> None:
         card = self.focused_card()

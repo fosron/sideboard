@@ -556,5 +556,32 @@ async def test_the_footer_shows_only_the_keys_that_work(tmp_path: Path) -> None:
             assert "s save" not in footer, (widget_id, footer)
             assert "c comments" not in footer, (widget_id, footer)
             assert "p pin" not in footer, "not an Overview card"
+            assert "[ ] switch" not in footer, "this tab has one view"
             break
+
+        # A filterable tab offers the switch, and the view the reader lands on is a card.
+        await pilot.press("3")
+        await pilot.pause()
+        await asyncio.sleep(0.6)
+        assert "[ ] switch" in app._last_footer_status, app._last_footer_status
+    await app.runtime.database.aclose()
+
+
+async def test_the_way_out_survives_the_narrowest_footer(tmp_path: Path) -> None:
+    """`q quit` and `? help` are dropped last, not first.
+
+    They were appended to the list of hints that gets trimmed from the end when the line
+    does not fit, so the narrowest window lost the way out before it lost `p pin`.
+    """
+    from tests.ui.test_app import make_app, settle  # type: ignore[import-not-found]
+
+    app = await make_app(tmp_path)
+    async with app.run_test(size=(72, 30)) as pilot:
+        await settle(app, pilot)
+        app._update_chrome(force=True)
+        await pilot.pause()
+        footer = app._last_footer_status
+        assert footer.rstrip().endswith("? help"), footer
+        assert "q quit" in footer, footer
+        assert len(footer) <= 70, "the line must fit the window it is drawn in"
     await app.runtime.database.aclose()

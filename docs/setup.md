@@ -120,6 +120,7 @@ The tabs are the first row, so the cards get the rest of the window.
 | `Ctrl+P` | palette: any tab, any widget, any palette, and the application actions |
 | `Ctrl+R` | validate and reload configuration; an invalid update keeps the running one |
 | `Tab` / `Shift+Tab` | next / previous card of the visible tab, wrapping |
+| `[` / `]` | previous / next view of the subfilter row (the Read tab), from anywhere on the tab |
 | `←` / `→` (`h` / `l`) | move to the card on the left / right, wrapping at the ends |
 | `↑` / `↓` (`k` / `j`) | move the selection inside the focused card; at the first or last row it moves to the card above or below. A view with both a list and a table is one list: the cursor walks the items and then continues into the table rows |
 | `PgUp` / `PgDn`, `Home` / `End`, wheel | scroll a tab whose cards are taller than the window |
@@ -218,7 +219,11 @@ A card is always laid out with a usable height:
   together need more rows than the window has — `PgDn` or the wheel reaches the later
   cards;
 * a **filterable tab** (Read) gives one row to the subfilter bar and the rest to the
-  selected view.
+  selected view. Each entry carries the number of rows behind it (`News 10 · HN Top 3 ·
+  Saved 1`), because only the selected view has a card: without a count, nothing on the
+  tab says the Saved view has anything in it. `[` and `]` switch views from anywhere on
+  the tab and the keyboard follows the switch into the new card; `←` / `→` do the same
+  once the row itself has focus.
 
 If a card looks too small, press `Enter` on it: the detail view uses the whole window.
 

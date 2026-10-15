@@ -17,7 +17,7 @@ from textual.widget import Widget
 from textual.widgets import Static
 
 from .card import CardShell
-from .styles import BORDER_FOCUS, DIM, VALUE
+from .styles import BORDER_FOCUS, DIM, ITEM, VALUE
 from .text import single_line
 
 __all__ = ["CompactStatus", "DetailPane", "FilterBar"]
@@ -40,6 +40,26 @@ class FilterBar(Widget, can_focus=True):
         super().__init__(id=id)
         self.filters = tuple(filters)
         self.active = self.filters[0][0] if self.filters else ""
+        self.counts: dict[str, int] = {}
+
+    def set_counts(self, counts: Mapping[str, int]) -> None:
+        """How many rows each view holds.
+
+        An unselected entry is otherwise invisible: nothing on the Read tab says the Saved
+        view has a link in it, and a reader who does not already know it is there never
+        selects it. Zero shows no count rather than "0", which is what the empty card says
+        in words when it is opened.
+        """
+        if dict(counts) == self.counts:
+            return
+        self.counts = dict(counts)
+        self.refresh()
+
+    def label_for(self, filter_id: str) -> str:
+        """The displayed text of one entry: its label, and its count when it has rows."""
+        label = dict(self.filters).get(filter_id, filter_id)
+        count = self.counts.get(filter_id, 0)
+        return f"{label} {count}" if count else label
 
     def set_filters(self, filters: Sequence[tuple[str, str]], *, keep: bool = True) -> None:
         self.filters = tuple(filters)
@@ -50,22 +70,28 @@ class FilterBar(Widget, can_focus=True):
 
     def render(self) -> Text:
         text = Text()
-        for index, (filter_id, label) in enumerate(self.filters):
+        for index, (filter_id, _) in enumerate(self.filters):
             if index:
                 text.append("   ")
             selected = filter_id == self.active
-            text.append(single_line(label, 24), style=VALUE if selected else DIM)
+            # The selected entry is marked, not the others hidden: `sb-dim` measured
+            # 4.4966:1 against the panel, below AA, and on the iPad the unselected views
+            # faded out of the row entirely. `sb-item` is the ordinary list-entry tone.
+            text.append(
+                single_line(self.label_for(filter_id), 24), style=VALUE if selected else ITEM
+            )
             if selected:
                 text.append(" ●", style=BORDER_FOCUS)
         return text
 
     def action_next(self) -> None:
-        self._shift(1)
+        self.shift(1)
 
     def action_previous(self) -> None:
-        self._shift(-1)
+        self.shift(-1)
 
-    def _shift(self, delta: int) -> None:
+    def shift(self, delta: int) -> None:
+        """Move the selection; used by the arrows and by the application's `[` / `]`."""
         if not self.filters:
             return
         ids = [filter_id for filter_id, _ in self.filters]
@@ -82,8 +108,8 @@ class FilterBar(Widget, can_focus=True):
     def on_click(self, event: Click) -> None:
         """Select the label under the pointer."""
         column = 0
-        for filter_id, label in self.filters:
-            width = len(single_line(label, 24)) + (3 if column else 0)
+        for filter_id, _ in self.filters:
+            width = len(single_line(self.label_for(filter_id), 24)) + (3 if column else 0)
             if column <= event.x < column + width:
                 self._select(filter_id)
                 return

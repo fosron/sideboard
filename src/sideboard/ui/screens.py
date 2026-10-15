@@ -424,6 +424,10 @@ class HelpScreen(DismissOnOutsideClick, ModalScreen[None]):
             style=DIM,
         )
         lines.append(
+            "[ ] switch the views of a filterable tab (Read), \u2190 \u2192 once its row has focus.\n",
+            style=DIM,
+        )
+        lines.append(
             "The pointer/focus diagnostic is a development tool: it is in the palette "
             "(Ctrl+P) and in `sideboard doctor --mouse`.\n",
             style=DIM,
