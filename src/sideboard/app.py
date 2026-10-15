@@ -302,6 +302,7 @@ class SideboardApp(App[None]):
         Binding("p", "pin", "pin"),
         Binding("n", "advance", "next card"),
         Binding("o", "open_url", "open link"),
+        Binding("c", "open_discussion", "comments"),
         Binding("s", "save_item", "save"),
         Binding("r", "refresh_source", "refresh"),
         Binding("v", "toggle_privacy", "privacy"),
@@ -1102,6 +1103,22 @@ class SideboardApp(App[None]):
         url = card.selected_url()
         if not url:
             self.notify("No link on the selected row")
+            return
+        self.open_validated_url(url)
+
+    def action_open_discussion(self) -> None:
+        """`c`: the selected row's second link — a comment thread, a permalink.
+
+        A Hacker News story has an article *and* a discussion; `o` opens the first and
+        this opens the second, rather than the dashboard choosing one for the reader.
+        """
+        card = self.focused_card()
+        if card is None:
+            self.notify("Focus a card first: the arrow keys walk the cards")
+            return
+        url = card.selected_alt_url()
+        if not url:
+            self.notify("No discussion link on this row")
             return
         self.open_validated_url(url)
 

@@ -197,6 +197,10 @@ def _item(story: Story, *, settings: HackerNewsWidgetSettings, context: ViewCont
         id=f"hn:{story.id}",
         title=story.title,
         url=story.url or discussion_url(story.id),
+        # The comments page is a second destination, not a replacement: `o` opens the
+        # article, `c` opens the thread. A story with no article URL already points at its
+        # discussion, so it offers no second link.
+        alt_url=discussion_url(story.id) if story.url else None,
         published_at=story.time,
         meta=tuple(meta),
     )

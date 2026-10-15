@@ -426,3 +426,54 @@ async def test_a_stale_card_is_drawn_as_stale(tmp_path: Path) -> None:
         assert card.is_stale is True
         assert card.has_class("sb-stale"), "the stylesheet needs the class to tone it"
     await app.runtime.database.aclose()
+
+
+async def test_c_opens_the_discussion_of_the_selected_row(tmp_path: Path) -> None:
+    """`o` opens the article, `c` the comment thread; a row with neither says so.
+
+    The row is given both links by hand: which source offers a second link is a feature's
+    decision (Hacker News and Reddit do), and this test is about the key and the card.
+    """
+    from dataclasses import replace
+
+    from tests.ui.test_app import make_app, settle  # type: ignore[import-not-found]
+
+    app = await make_app(tmp_path)
+    opened: list[str] = []
+    app.open_validated_url = lambda url: opened.append(url)  # type: ignore[method-assign]
+    async with app.run_test(size=(140, 44)) as pilot:
+        await settle(app, pilot)
+        # The Overview's own cards: they are on the visible tab, so focus works.
+        assert app._overview is not None
+        card = next(
+            card
+            for card in app._overview.cards.values()
+            if card.view is not None and card.view.items
+        )
+        assert card.view is not None
+        item = replace(
+            card.view.items[0],
+            url="https://example.com/article",
+            alt_url="https://news.ycombinator.com/item?id=1",
+        )
+        card.view = replace(card.view, items=(item, *card.view.items[1:]))
+        card.focus()
+        card.select_index(0)
+        await pilot.pause()
+
+        await pilot.press("c")
+        await pilot.pause()
+        assert opened == [item.alt_url], opened
+        await pilot.press("o")
+        await pilot.pause()
+        assert opened == [item.alt_url, item.url], opened
+
+        # A row without a second link reports it rather than opening the first one again.
+        card.view = replace(card.view, items=(replace(item, alt_url=None), *card.view.items[1:]))
+        await pilot.pause()
+        await pilot.press("c")
+        await pilot.pause()
+        assert opened == [item.alt_url, item.url], opened
+        notices = [str(note.message) for note in app._notifications]
+        assert any("No discussion link" in note for note in notices), notices
+    await app.runtime.database.aclose()

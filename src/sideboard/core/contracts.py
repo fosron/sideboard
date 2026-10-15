@@ -424,6 +424,11 @@ class Item:
     title: str
     subtitle: str | None = None
     url: str | None = None
+    #: A second link for the same entry, when the entry has two destinations: a Hacker
+    #: News story has its article *and* its comment thread, a Reddit thread has its
+    #: permalink. The dashboard opens it with `c`; a feature sets it only when it differs
+    #: from ``url``, so a row never offers the same link twice.
+    alt_url: str | None = None
     category: str | None = None
     published_at: datetime | None = None
     meta: tuple[tuple[str, str], ...] = ()

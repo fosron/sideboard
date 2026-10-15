@@ -297,3 +297,19 @@ def test_feature_spec_registers_source_and_widget() -> None:
 def test_widget_settings_reject_unknown_lists() -> None:
     with pytest.raises(ValidationError, match="unknown Hacker News list"):
         HackerNewsWidgetSettings(list="front")
+
+
+def test_a_story_offers_its_discussion_as_a_second_link() -> None:
+    """`o` opens the article, `c` opens the thread: the dashboard does not choose."""
+    from sideboard.features.hackernews.models import discussion_url
+
+    with_url = _story(1, url="https://example.com/article")
+    without_url = _story(2, url=None)
+    view = _present(_payload((with_url, without_url)))
+
+    first, second = view.items
+    assert first.url == "https://example.com/article"
+    assert first.alt_url == discussion_url(1), "the thread is the second destination"
+    # A story with no article already points at its discussion: no duplicate link.
+    assert second.url == discussion_url(2)
+    assert second.alt_url is None

@@ -325,6 +325,24 @@ class CardShell(Widget, can_focus=True):
         assert view.table is not None
         return view.table.rows[index].id
 
+    def selected_alt_url(self) -> str | None:
+        """The selected row's second link — a comment thread, a permalink.
+
+        `o` opens a row's first destination, `c` its second: a Hacker News story has an
+        article and a discussion, and the dashboard should not choose for the reader. A
+        table row has one link today, so this is the reading item's case.
+        """
+        view = self.view
+        if view is None:
+            return None
+        target = cursor_target(view, self.cursor_index)
+        if target is None:
+            return None
+        kind, index = target
+        if kind != "item":
+            return None
+        return view.items[index].alt_url
+
     def selected_url(self) -> str | None:
         view = self.view
         if view is None:

@@ -120,6 +120,7 @@ reference on screen. The tabs are the first row, so the cards get the rest of th
 | `Enter` / click | open the detail view |
 | `Enter` / click inside the detail view | open the link on the selected row; a click on the dimmed margin closes the view |
 | `o` | open the selected validated HTTP(S) link in your browser |
+| `c` | open the selected row's *second* link — a Hacker News comment thread, a Reddit permalink |
 | `s` | save / unsave the selected item |
 | `r` | request a rate-limited refresh of the focused card's provider |
 | `v` | privacy mode: mask amounts, process names, container and project names |
@@ -164,6 +165,11 @@ reference on screen. The tabs are the first row, so the cards get the rest of th
   region rather than the widget that received the event).
 * **Links open from the detail view.** `Enter` or a click opens the link on the row under
   the cursor; a row with no link says so instead of opening another row's.
+* **Two destinations, two keys.** A Hacker News story has an article *and* a comment
+  thread, a Reddit thread has a permalink: `o` opens the first, `c` opens the second. A
+  feature sets the second link only when it differs from the first, so no row offers the
+  same destination twice, and a row without one says "no discussion link" rather than
+  opening something else.
 * **Losing terminal focus clears stale pointer holds only.** It never pauses rotation
   globally; the app keeps rotating while you work in another window.
 * **Holds are tracked per reason** (`hover`, `interaction`, `modal`, `manual`), so

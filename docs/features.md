@@ -34,9 +34,9 @@ widget consumes owns no recurring task at all.
 | `weather.summary` | `primary`: weather.forecast | world | temperature with the current-weather symbol, wind, rain next 6 h | current conditions, the next hours, then the 7-day table |
 | `news.digest` | `primary`: news.feeds | world | deterministic diversity digest, with the age of the newest story and of each row | per-bucket list with source and age, plus feed health |
 | `news.saved` | — (local state) | world | saved reading/video links | same list, longer |
-| `hackernews.list` | `primary`: hackernews.stories | software | ranked item list | up to 30 items |
+| `hackernews.list` | `primary`: hackernews.stories | software | ranked item list; `o` opens the article, `c` the comment thread | up to 30 items |
 | `youtube.uploads` | `primary`: youtube.uploads | media | recent uploads, one channel per turn | per-channel problem table |
-| `reddit.list` | `primary`: reddit.threads (optional) | software | threads, or link-only community links | grouped by community |
+| `reddit.list` | `primary`: reddit.threads (optional) | software | threads, or link-only community links; `c` opens the permalink | grouped by community |
 | `portfolio.summary` | `positions`, `prices`?, `fx`?, `markets`? | finance | tracked value, priced count, weights | per-holding table |
 | `portfolio.holdings` | `positions`, `prices`?, `fx`?, `markets`? | finance | holdings table with basis columns | adds cost basis and reported values |
 | `portfolio.events` | `positions` | finance | dividends and investor links | dated events |

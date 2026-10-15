@@ -259,6 +259,7 @@ def _item(thread: Thread, settings: RedditListSettings) -> Item:
         title=thread.title,
         subtitle=" · ".join(subtitle_parts) or None,
         url=thread.url,
+        alt_url=(thread.permalink if thread.permalink and thread.permalink != thread.url else None),
         published_at=thread.published,
         meta=tuple(meta),
         privacy=Privacy.PUBLIC,

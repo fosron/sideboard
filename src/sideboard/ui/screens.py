@@ -176,6 +176,7 @@ class DetailScreen(DismissOnOutsideClick, ModalScreen[None]):
         Binding("escape", "dismiss_screen", "close"),
         Binding("enter", "open_url", "open link", show=False),
         Binding("o", "open_url", "open link"),
+        Binding("c", "open_discussion", "comments"),
         Binding("s", "save", "save"),
         Binding("up", "cursor_up", "up", show=False),
         Binding("k", "cursor_up", "up", show=False),
@@ -354,6 +355,20 @@ class DetailScreen(DismissOnOutsideClick, ModalScreen[None]):
             self.dismiss()
             self.app.open_validated_url(url)  # type: ignore[attr-defined]
 
+    def action_open_discussion(self) -> None:
+        """`c`: the second link of the row under the cursor (the comment thread)."""
+        target = cursor_target(self.view, self.index)
+        url = None
+        if target is not None:
+            kind, index = target
+            if kind == "item":
+                url = self.view.items[index].alt_url
+        if url is None:
+            self.notify("No discussion link on this row")  # type: ignore[attr-defined]
+            return
+        self.dismiss()
+        self.app.open_validated_url(url)  # type: ignore[attr-defined]
+
     def action_save(self) -> None:
         item_id = self._selected_id() or self._item_provider()
         if item_id:
@@ -385,6 +400,7 @@ class HelpScreen(DismissOnOutsideClick, ModalScreen[None]):
         ("p", "pin / unpin the focused overview card"),
         ("n", "advance the focused rotating card, even while paused"),
         ("o", "open the selected validated link in the browser"),
+        ("c", "open the discussion link of the selected row (Hacker News, Reddit)"),
         ("s", "save / unsave the selected item"),
         ("r", "request a rate-limited refresh of the selected provider"),
         ("v", "privacy mode: hide amounts and private identifiers"),
