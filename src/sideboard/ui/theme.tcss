@@ -5,6 +5,14 @@ Screen {
     color: $foreground;
 }
 
+/* Textual gives every widget a two-cell scrollbar in a bright ansi colour; on a dark
+   dashboard that is a wide, jagged stripe. One cell, in the palette's quiet tones: the
+   size is a style, not a theme variable, so it is set here. */
+Widget {
+    scrollbar-size-vertical: 1;
+    scrollbar-size-horizontal: 1;
+}
+
 #sb-body {
     height: 1fr;
 }

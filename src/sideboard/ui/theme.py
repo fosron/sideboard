@@ -66,6 +66,16 @@ def build_theme(palette: Palette, *, key: str) -> Theme:
         luminosity_spread=0.12,
         text_alpha=0.92,
         variables={
+            # One cell wide (the size is set in theme.tcss) and in palette colours: the
+            # built-in default is a two-cell bright-blue bar that reads as a jagged stripe
+            # on a dark dashboard.
+            "scrollbar": palette.border_held,
+            "scrollbar-hover": palette.border_focus,
+            "scrollbar-active": palette.focus,
+            "scrollbar-background": palette.surface,
+            "scrollbar-background-hover": palette.panel,
+            "scrollbar-background-active": palette.panel,
+            "scrollbar-corner-color": palette.surface,
             "sb-dim": palette.dim,
             "sb-value": palette.value,
             "sb-ok": palette.ok,

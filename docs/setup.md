@@ -246,6 +246,12 @@ focus_bg = "#123456"
 dim = "#8a95a1"
 ```
 
+Scrollbars are **one cell wide** and take their colours from the palette — the quiet
+border tone, the focus tone on hover, the focus colour while dragging. Textual's default
+is a two-cell bar in bright ansi blue, which reads as a wide, jagged stripe on a dark
+dashboard. The width is a style rather than a theme variable, so it is set once in
+`ui/theme.tcss`; the colours come from the palette like everything else.
+
 Rules the implementation holds to:
 
 * one palette drives **both** the Textual theme (borders, chrome, backgrounds) and the Rich

@@ -328,3 +328,20 @@ async def test_the_command_palette_can_switch_palettes_too(tmp_path: Path) -> No
         await pilot.pause()
         assert app.theme == "gruvbox"
     await app.runtime.database.aclose()
+
+
+async def test_scrollbars_are_one_cell_and_follow_the_palette(tmp_path: Path) -> None:
+    """Textual's default is a two-cell bar in bright ansi blue: wide and jagged on dark."""
+    app = await make_app(tmp_path, theme="nord")
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        widget = app.query_one("#sb-overview-rows")
+        assert widget.styles.scrollbar_size_vertical == 1
+        assert widget.styles.scrollbar_size_horizontal == 1
+        theme = app.get_theme("nord")
+        assert theme is not None
+        assert theme.variables["scrollbar"] == PALETTES["nord"].border_held
+        assert theme.variables["scrollbar-hover"] == PALETTES["nord"].border_focus
+        assert theme.variables["scrollbar-active"] == PALETTES["nord"].focus
+        assert theme.variables["scrollbar-background"] == PALETTES["nord"].surface
+    await app.runtime.database.aclose()
