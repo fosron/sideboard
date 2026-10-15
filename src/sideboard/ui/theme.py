@@ -87,8 +87,8 @@ def build_theme(palette: Palette, *, key: str) -> Theme:
             "sb-border": palette.border,
             "sb-border-focus": palette.border_focus,
             "sb-held": palette.held,
-            "sb-focus": palette.focus,
-            "sb-focus-bg": palette.focus_bg,
+            # sb-focus/sb-focus-bg are gone: focus is a marker plus a mid-tone border now,
+            # and the bright colour survives only as the scrollbar's active tone.
             "sb-border-held": palette.border_held,
         },
     )

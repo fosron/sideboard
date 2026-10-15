@@ -246,14 +246,14 @@ palette still applies for the session and a notification says what failed.
 Any single colour can be adjusted without leaving the palette — the token names are the
 palette's own field names (`background`, `surface`, `panel`, `boost`, `foreground`,
 `value`, `accent`, `primary`, `secondary`, `ok`, `info`, `warn`, `error`, `dim`, `item`,
-`read`, `border`, `border_focus`, `focus`, `focus_bg`, `held`, `border_held`):
+`read`, `border`, `border_focus`, `focus`, `held`, `border_held`):
 
 ```toml
 [app]
 theme = "nord"
 
 [app.theme_colors]
-focus_bg = "#123456"
+border_focus = "#123456"
 dim = "#8a95a1"
 ```
 

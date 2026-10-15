@@ -74,8 +74,8 @@ def test_both_halves_of_a_palette_are_built_from_it() -> None:
 
 
 def test_overrides_replace_single_tokens() -> None:
-    palette = resolve_palette("nord", {"focus_bg": "#123456", "dim": "#ABCDEF"})
-    assert palette.focus_bg == "#123456"
+    palette = resolve_palette("nord", {"border_focus": "#123456", "dim": "#ABCDEF"})
+    assert palette.border_focus == "#123456"
     assert palette.dim == "#abcdef", "colours are normalised"
     assert palette.background == PALETTES["nord"].background, "the rest is untouched"
 

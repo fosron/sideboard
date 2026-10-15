@@ -12,8 +12,8 @@ Mapping rules, so a palette reads the way its author intended:
 * ``dim`` is the comment/muted tone, ``item`` the ordinary text, ``value`` the tone for
   numbers that should stand out and ``read`` the tone for already-read entries;
 * ``border`` is the quiet card outline, ``border_held`` the pointer-held outline,
-  ``focus`` the keyboard-focus outline and ``focus_bg`` the lifted card background that
-  makes the focused card unmistakable;
+  ``focus`` the colour of a dragging scrollbar (focus itself is a marker plus a mid-tone
+  border, not a background lift);
 * ``ok`` / ``info`` / ``warn`` / ``error`` are the status colours.
 
 Every palette must define every field: a missing token would surface as a Rich
@@ -68,7 +68,6 @@ class Palette:
     border: str
     border_focus: str
     focus: str
-    focus_bg: str
     held: str
     border_held: str
 
@@ -145,7 +144,6 @@ PALETTES: dict[str, Palette] = {
         border="#2a323a",
         border_focus="#7aa2c8",
         focus="#a9cdf2",
-        focus_bg="#1e2833",
         held="#d8b26a",
         border_held="#4c5866",
     ),
@@ -171,7 +169,6 @@ PALETTES: dict[str, Palette] = {
         border="#45475a",
         border_focus="#89b4fa",
         focus="#89dceb",
-        focus_bg="#313244",
         held="#fab387",
         border_held="#6c7086",
     ),
@@ -197,7 +194,6 @@ PALETTES: dict[str, Palette] = {
         border="#292e42",
         border_focus="#7aa2f7",
         focus="#7dcfff",
-        focus_bg="#24283b",
         held="#ff9e64",
         border_held="#414868",
     ),
@@ -223,7 +219,6 @@ PALETTES: dict[str, Palette] = {
         border="#434c5e",
         border_focus="#88c0d0",
         focus="#8fbcbb",
-        focus_bg="#3b4252",
         held="#ebcb8b",
         border_held="#4c566a",
     ),
@@ -249,7 +244,6 @@ PALETTES: dict[str, Palette] = {
         border="#3c3836",
         border_focus="#83a598",
         focus="#8ec07c",
-        focus_bg="#32302f",
         held="#fe8019",
         border_held="#504945",
     ),
@@ -275,7 +269,6 @@ PALETTES: dict[str, Palette] = {
         border="#44475a",
         border_focus="#bd93f9",
         focus="#8be9fd",
-        focus_bg="#282a36",
         held="#ffb86c",
         border_held="#6272a4",
     ),
@@ -301,7 +294,6 @@ PALETTES: dict[str, Palette] = {
         border="#3e4451",
         border_focus="#61afef",
         focus="#56b6c2",
-        focus_bg="#2c313a",
         held="#d19a66",
         border_held="#5c6370",
     ),
@@ -327,7 +319,6 @@ PALETTES: dict[str, Palette] = {
         border="#12414d",
         border_focus="#268bd2",
         focus="#2aa198",
-        focus_bg="#0b3b47",
         held="#cb4b16",
         border_held="#586e75",
     ),
@@ -353,7 +344,6 @@ PALETTES: dict[str, Palette] = {
         border="#26233a",
         border_focus="#c4a7e7",
         focus="#9ccfd8",
-        focus_bg="#21202e",
         held="#ebbcba",
         border_held="#524f67",
     ),
@@ -379,7 +369,6 @@ PALETTES: dict[str, Palette] = {
         border="#2a2a37",
         border_focus="#7e9cd8",
         focus="#7e9cd8",
-        focus_bg="#223249",
         held="#ff9e3b",
         border_held="#54546d",
     ),
@@ -405,7 +394,6 @@ PALETTES: dict[str, Palette] = {
         border="#3d484d",
         border_focus="#7fbbb3",
         focus="#83c092",
-        focus_bg="#343f44",
         held="#e69875",
         border_held="#475258",
     ),
