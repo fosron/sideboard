@@ -59,39 +59,42 @@ _BASIS_CURRENT = "forecast"
 _BASIS_HOURLY = "hourly forecast"
 _BASIS_DAILY = "daily forecast"
 
-#: One text-presentation Unicode symbol per WMO code group. Deliberately not emoji: a
-#: double-width glyph breaks a metric grid, and the terminal requirements promise no Nerd
-#: Font and no emoji. Where Unicode defaults a symbol to emoji presentation, U+FE0E
-#: (variation selector-15) asks for the text form, which is one cell wide.
+#: One symbol per WMO code group. Deliberately not emoji: a double-width glyph breaks a
+#: metric grid, and the terminal requirements promise no Nerd Font and no emoji.
 _WMO_ICON: dict[int, str] = {
+    # Chosen by measurement, not by looks: every glyph below is one cell wide in Rich's
+    # model and has no ambiguous East Asian width. The obvious candidates fail — "⛅" and
+    # "☔" measure two cells even with U+FE0E, and "⛈" is width-ambiguous — so states that
+    # have no single-cell symbol share one and let the word beside it carry the degree
+    # ("partly cloudy" vs "overcast").
     0: "\u2600",  # ☀ clear sky
     1: "\u263c",  # ☼ mainly clear
-    2: "\u26c5\ufe0e",  # ⛅ partly cloudy
+    2: "\u2601",  # ☁ partly cloudy (shares the cloud: no single-cell sun-behind-cloud)
     3: "\u2601",  # ☁ overcast
-    45: "\u2261",  # ≡ fog
-    48: "\u2261",  # ≡ depositing rime fog
+    45: "\u2263",  # ≣ fog
+    48: "\u2263",  # ≣ depositing rime fog
     51: "\u2602",  # ☂ light drizzle
     53: "\u2602",  # ☂ moderate drizzle
     55: "\u2602",  # ☂ dense drizzle
     56: "\u2602",  # ☂ light freezing drizzle
     57: "\u2602",  # ☂ dense freezing drizzle
-    61: "\u2614\ufe0e",  # ☔ slight rain
-    63: "\u2614\ufe0e",  # ☔ moderate rain
-    65: "\u2614\ufe0e",  # ☔ heavy rain
-    66: "\u2614\ufe0e",  # ☔ light freezing rain
-    67: "\u2614\ufe0e",  # ☔ heavy freezing rain
+    61: "\u2602",  # ☂ slight rain
+    63: "\u2602",  # ☂ moderate rain
+    65: "\u2602",  # ☂ heavy rain
+    66: "\u2602",  # ☂ light freezing rain
+    67: "\u2602",  # ☂ heavy freezing rain
     71: "\u2744",  # ❄ slight snow
     73: "\u2744",  # ❄ moderate snow
     75: "\u2744",  # ❄ heavy snow
     77: "\u2744",  # ❄ snow grains
-    80: "\u2614\ufe0e",  # ☔ slight rain showers
-    81: "\u2614\ufe0e",  # ☔ moderate rain showers
-    82: "\u2614\ufe0e",  # ☔ violent rain showers
+    80: "\u2602",  # ☂ slight rain showers
+    81: "\u2602",  # ☂ moderate rain showers
+    82: "\u2602",  # ☂ violent rain showers
     85: "\u2744",  # ❄ slight snow showers
     86: "\u2744",  # ❄ heavy snow showers
-    95: "\u26c8\ufe0e",  # ⛈ thunderstorm
-    96: "\u26c8\ufe0e",  # ⛈ thunderstorm with slight hail
-    99: "\u26c8\ufe0e",  # ⛈ thunderstorm with heavy hail
+    95: "\u2608",  # ☈ thunderstorm
+    96: "\u2608",  # ☈ thunderstorm with slight hail
+    99: "\u2608",  # ☈ thunderstorm with heavy hail
 }
 
 _WMO_TEXT: dict[int, str] = {

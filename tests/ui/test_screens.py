@@ -371,3 +371,58 @@ async def test_arrows_walk_rows_in_a_long_modal_and_page_keys_scroll() -> None:
             if "›" in str(getattr(row.visual, "_renderable", row.visual))
         ]
         assert len(marked) == 1, "exactly one row is marked"
+
+
+def test_widget_labels_read_like_names() -> None:
+    """A filter called "List" and a card called "Hn Top" are identifiers, not labels."""
+    from sideboard.app import widget_label
+
+    assert widget_label("reddit", None, "reddit.list") == "Reddit"
+    assert widget_label("hn_top", None, "hackernews.list") == "HN Top"
+    assert widget_label("weather", None, "weather.summary") == "Weather"
+    assert widget_label("mac_summary", None, "mac.summary") == "Mac Summary"
+    assert widget_label("docker_containers", None, "docker.table") == "Docker Containers"
+    assert widget_label("news", "My News", "news.digest") == "My News", "a configured title wins"
+
+
+def test_border_chrome_cannot_be_parsed_as_markup() -> None:
+    """Textual parses border titles as markup; provider text must not reach it raw.
+
+    Measured before the fix: `[live] News` silently lost text, `[red]BBC[/red]` was styled,
+    `[link=evil.example]click[/link]` became a terminal hyperlink, and `[/]` raised
+    MarkupError — a crash path from a feed's own title.
+    """
+    from sideboard.ui.text import markup_free
+
+    assert markup_free("[live] News") == "(live) News"
+    assert markup_free("[red]BBC[/red]") == "(red)BBC(/red)"
+    assert markup_free("[link=evil.example]click[/link]") == "(link=evil.example)click(/link)"
+    assert markup_free("[/]") == "(/)"
+    assert markup_free("\x1b[31mred\x1b[0m") == "red", "control stripping still applies"
+
+
+async def test_a_stale_card_is_drawn_as_stale(tmp_path: Path) -> None:
+    """Colour, not only one dim word: the values dim and the timestamp warns."""
+    from sideboard.core.contracts import Freshness
+    from tests.ui.test_app import make_app, settle  # type: ignore[import-not-found]
+
+    app = await make_app(tmp_path)
+    async with app.run_test(size=(140, 44)) as pilot:
+        await settle(app, pilot)
+        card = app._card_for_widget("mac_summary")
+        assert card is not None and card.envelope is not None
+        assert card.is_stale is False
+        from dataclasses import replace
+
+        card.envelope = replace(card.envelope, freshness=Freshness.EXPIRED)
+        card.set_card(
+            widget_id=card.widget_id,
+            title=card.card_title,
+            view=card.view,
+            envelope=card.envelope,
+            freshness=card.freshness,
+        )
+        await pilot.pause()
+        assert card.is_stale is True
+        assert card.has_class("sb-stale"), "the stylesheet needs the class to tone it"
+    await app.runtime.database.aclose()

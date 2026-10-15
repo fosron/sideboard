@@ -69,6 +69,12 @@ with a favourites-first ranking and no watch history, one favourite channel that
 daily otherwise filled the card on its own. Within a channel the ranking still decides the
 order, and `group_by_channel` turns the spread off by grouping instead.
 
+A metric's `severity` and a table row's `severity` are **drawn**: warnings and errors take
+the status colour, ordinary values the text tone (muted when the card's data is stale).
+Before, `severity` was computed by presenters and discarded, so a failure looked like a
+success. A widget's label comes from its configured `title`, else a readable fallback —
+`reddit.list` is "Reddit", not "List", and `hn_top` is "HN Top".
+
 Footnotes, metric bases and payload notes are recorded by presenters for the record and
 are **not rendered**: the dashboard prints values, and a `StatusView` or a warning-severity
 metric is how it reports a problem. The one annotation a table may carry is `truncated`.

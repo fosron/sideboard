@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import datetime
 
+from rich.cells import cell_len
 from rich.console import Group, RenderableType
 from rich.table import Table
 from rich.text import Text
@@ -23,7 +24,7 @@ from ...core.contracts import (
     StatusView,
     TableView,
 )
-from ..styles import BORDER, BORDER_FOCUS, DIM, INFO, ITEM, READ, VALUE, WARN
+from ..styles import BORDER, BORDER_FOCUS, DIM, ERROR, INFO, ITEM, READ, VALUE, WARN
 from ..text import SEVERITY_STYLE, control_free, single_line
 
 __all__ = [
@@ -48,8 +49,22 @@ def render_metrics(
     width: int,
     privacy: bool,
     columns: int = 2,
+    dim: bool = False,
 ) -> RenderableType:
-    """Label/value grid. Unavailable fields stay visibly unavailable."""
+    """Label/value grid. Unavailable fields stay visibly unavailable.
+
+    Two things this grid gets right and used to get wrong:
+
+    * a value's colour follows ``Metric.severity``. The presenter computes it, so a
+      warning must not be drawn in the same tone as a normal number — that is the whole
+      point of a wall display;
+    * padding is measured in terminal *cells*, not characters. ``len()`` is wrong for any
+      glyph that is not one cell wide, and it shifted a row by one column whenever a value
+      contained one.
+
+    ``dim`` renders ordinary values in the muted tone: a card whose data is stale should
+    not look as bright as one whose data is current.
+    """
     if not metrics:
         return Text("")
     usable = max(1, width - 2)
@@ -78,16 +93,31 @@ def render_metrics(
                 value = single_line(metric.value_text, max(6, cell // 2))
                 if metric.unit:
                     value = f"{value} {control_free(metric.unit)}".strip()
-                style = VALUE
+                style = _severity_style(metric.severity, dim=dim)
             line.append(label, style=DIM)
             line.append(" ")
             line.append(value, style=style)
-            pad = cell - (len(label) + 1 + len(value))
+            pad = cell - (cell_len(label) + 1 + cell_len(value))
             if pad > 1:
                 line.append(" " * pad)
         line.rstrip()
         rows.append(line)
     return Group(*rows)
+
+
+def _severity_style(severity: Severity, *, dim: bool) -> str:
+    """The value tone for a metric: its severity, or the ordinary tone.
+
+    OK and UNKNOWN are not states worth colouring — every normal number is one of them —
+    so they keep the ordinary tone (muted when the card is stale).
+    """
+    if severity is Severity.WARNING:
+        return WARN
+    if severity is Severity.ERROR:
+        return ERROR
+    if severity is Severity.INFO:
+        return INFO
+    return DIM if dim else VALUE
 
 
 def render_status(status: StatusView, *, width: int) -> RenderableType:
@@ -104,7 +134,9 @@ def render_status(status: StatusView, *, width: int) -> RenderableType:
     return Group(headline)
 
 
-def render_item_row(raw: object, *, width: int, privacy: bool, selected: bool = False) -> Text:
+def render_item_row(
+    raw: object, *, width: int, privacy: bool, selected: bool = False, dim: bool = False
+) -> Text:
     """One item row: cursor, saved marker, title, badge and stats — never two lines.
 
     Extracted so the detail view can render rows as individual widgets: a click then lands
@@ -121,10 +153,10 @@ def render_item_row(raw: object, *, width: int, privacy: bool, selected: bool = 
         line.append("  ")
     line.append("◆ " if raw.saved else "  ", style=WARN)
     hide = privacy and raw.privacy is Privacy.PRIVATE
-    style = READ if raw.read else ITEM
+    style = READ if raw.read else (DIM if dim else ITEM)
     badge = f" [{single_line(raw.badge, 20)}]" if raw.badge else ""
     meta_text = ""
-    if raw.meta and width >= 60:
+    if raw.meta and width >= META_MIN_WIDTH:
         meta_parts = []
         for key, value in raw.meta[:3]:
             text = "••••" if hide else single_line(value, 18)
@@ -155,6 +187,7 @@ def render_items(
     selected_index: int = 0,
     now: datetime | None = None,
     max_rows: int | None = None,
+    dim: bool = False,
 ) -> RenderableType:
     """One row per item with a cursor. Long titles are truncated, never wrapped."""
     from ...core.contracts import Item
@@ -168,7 +201,7 @@ def render_items(
         line = render_item_row(raw, width=width, privacy=privacy, selected=index == selected_index)
         rows.append(line)
         hide = privacy and raw.privacy is Privacy.PRIVATE
-        if raw.subtitle and width >= 60:
+        if raw.subtitle and width >= SUBTITLE_MIN_WIDTH:
             sub = Text("     ")
             sub.append("…" if hide else single_line(raw.subtitle, max(20, width - 8)), style=DIM)
             rows.append(sub)
@@ -187,6 +220,7 @@ def render_table(
     width: int,
     privacy: bool,
     selected_index: int = 0,
+    dim: bool = False,
 ) -> RenderableType:
     """Compact table. Grouped rows carry a group header line."""
     table = Table(
@@ -215,14 +249,14 @@ def render_table(
             header_cell = Text(single_line(group_name, max(10, width - 6)), style=WARN)
             table.add_row(*_pad_cells([header_cell], len(view.columns)), style="")
         for row in rows:
-            _add_row(table, view, row, privacy, selected_index, index)
+            _add_row(table, view, row, privacy, selected_index, index, dim=dim)
             rendered.add(row.id)  # type: ignore[attr-defined]
             index += 1
     ungrouped = [row for row in view.rows if row.id not in rendered]
     if grouped and ungrouped and any(name for name, _ in view.groups):
         table.add_row(*_pad_cells([Text("ungrouped", style=DIM)], len(view.columns)))
     for row in ungrouped:
-        _add_row(table, view, row, privacy, selected_index, index)
+        _add_row(table, view, row, privacy, selected_index, index, dim=dim)
         index += 1
     return table
 
@@ -240,23 +274,50 @@ def _add_row(
     privacy: bool,
     selected_index: int,
     index: int,
+    *,
+    dim: bool = False,
 ) -> None:
     cells: list[Text] = []
     hide = privacy and getattr(row, "privacy", Privacy.PUBLIC) is Privacy.PRIVATE
     for column in view.columns:
         raw = getattr(row, "cells", {}).get(column.id, "")
-        text = Text(
-            "••••" if (hide and column.privacy is Privacy.PRIVATE) else single_line(raw, 28)
+        cells.append(
+            Text("••••" if (hide and column.privacy is Privacy.PRIVATE) else single_line(raw, 28))
         )
-        severity = getattr(row, "severity", Severity.UNKNOWN)
-        known_severity = severity if isinstance(severity, Severity) else Severity.UNKNOWN
-        if known_severity is not Severity.UNKNOWN and column.id == "state":
-            text.stylize(SEVERITY_STYLE.get(known_severity, VALUE))
-        cells.append(text)
     prefix = "›" if index == selected_index else " "
     cells[0] = Text.assemble(Text(prefix + " "), cells[0])
-    table.add_row(*cells, style=READ if index != selected_index else VALUE)
+    severity = getattr(row, "severity", Severity.UNKNOWN)
+    known_severity = severity if isinstance(severity, Severity) else Severity.UNKNOWN
+    table.add_row(
+        *cells,
+        style=_row_style(known_severity, selected=index == selected_index, dim=dim),
+    )
 
+
+def _row_style(severity: Severity, *, selected: bool, dim: bool) -> str:
+    """A table row's tone: the row's severity, else ordinary text.
+
+    Two things this fixes. Unselected rows were painted with the *read* tone, which dimmed
+    every container, source and workflow run as though it had been read — read state is a
+    property of a reading item, not of a row. And severity was applied only to a column
+    literally named "state", so the Actions table drew "failure" and "success" in one tone.
+    """
+    if severity is Severity.WARNING:
+        return WARN
+    if severity is Severity.ERROR:
+        return ERROR
+    if selected:
+        return VALUE
+    return DIM if dim else ITEM
+
+
+#: A row can carry its badge and stats once the card is wider than this. The documented
+#: minimum window is 60 columns, and a card inside it is 56 wide after its border and
+#: padding: a threshold of 60 meant meta columns never rendered at the smallest size the
+#: product claims to support.
+META_MIN_WIDTH = 48
+#: A subtitle is a whole second line, so it needs a little more room than a meta column.
+SUBTITLE_MIN_WIDTH = 56
 
 _SPARK = "▁▂▃▄▅▆▇█"
 

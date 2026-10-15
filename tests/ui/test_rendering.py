@@ -87,7 +87,9 @@ async def test_overview_shows_real_card_content(tmp_path: Path) -> None:
 
         # …and the card content that was missing.
         assert "Demo Equity" in text, "the portfolio table must render its rows"
-        assert "DEMO: Klaipėda opens a new pier section" in text, "the digest must render items"
+        # The digest row carries its age now, which costs title room on a 56-cell card:
+        # the headline is truncated, as designed, and the fragment is what is visible.
+        assert "DEMO: Klaipėda opens a new pier" in text, "the digest must render items"
         assert "partly cloudy" in text, "the weather card must render its metrics"
         assert "RAM" in text and "CPU" in text, "the Mac card must render its metrics"
         assert "Tracked" not in text
@@ -409,3 +411,78 @@ def test_hours_come_before_days_in_a_full_view() -> None:
     hours = rendered.index("18:00")
     days = rendered.index("Wed 14 Oct")
     assert hours < days, rendered
+
+
+def test_severity_owns_the_value_colour() -> None:
+    """A presenter computes severity so the screen can use it.
+
+    Before: `render_metrics` never read it, so "failed 1" was drawn exactly like
+    "running 2", and `_add_row` applied severity only to a column literally named "state",
+    so the Actions table showed "failure" and "success" in one tone.
+    """
+    from sideboard.core.contracts import Metric, Severity
+    from sideboard.ui.renderers import render_metrics
+    from sideboard.ui.styles import ERROR, VALUE, WARN
+
+    def tones(severity: Severity) -> set[str]:
+        rendered = render_metrics(
+            (Metric(id="m", label="failed", value_text="1", severity=severity),),
+            width=60,
+            privacy=False,
+        )
+        styles: set[str] = set()
+        for line in rendered.renderables:  # type: ignore[attr-defined]
+            for _start, _end, style in line.spans:
+                styles.add(style)
+        return styles
+
+    assert WARN in tones(Severity.WARNING)
+    assert ERROR in tones(Severity.ERROR)
+    assert VALUE in tones(Severity.OK)
+    assert WARN not in tones(Severity.OK), "an ordinary number is not a warning"
+
+
+def test_metric_padding_measures_cells_not_characters() -> None:
+    """`len()` is wrong for any glyph that is not one cell wide.
+
+    The weather icon set used to include two-cell symbols, and a row containing one
+    started a column to the left of every other row.
+    """
+    from sideboard.core.contracts import Metric
+    from sideboard.ui.renderers import render_metrics
+
+    wide = Metric(id="a", label="Temp", value_text="⛅ 13.3", unit="°C")
+    narrow = Metric(id="b", label="Wind", value_text="9", unit="km/h")
+    rendered = render_metrics((wide, narrow), width=80, privacy=False)
+    first = rendered.renderables[0].plain  # type: ignore[attr-defined]
+    # "Wind" starts at the same cell in both columns, so its character index is one less
+    # than the cell index — the point is that the second column is not pushed right.
+    assert first.index("Wind") == 40, repr(first)
+
+
+def test_a_table_row_is_not_dimmed_for_being_unread() -> None:
+    """Read state belongs to a reading item, not to a container or a source row."""
+    from sideboard.core.contracts import Severity, TableColumn, TableRow, TableView
+    from sideboard.ui.renderers import render_table
+    from sideboard.ui.styles import ITEM, WARN
+
+    view = TableView(
+        columns=(TableColumn(id="name", label="name"), TableColumn(id="state", label="state")),
+        rows=(
+            TableRow(id="1", cells={"name": "web", "state": "running"}),
+            TableRow(id="2", cells={"name": "db", "state": "unhealthy"}, severity=Severity.WARNING),
+        ),
+    )
+    table = render_table(view, width=60, privacy=False, selected_index=-1)
+    styles = {str(row.style) for row in table.rows}  # type: ignore[attr-defined]
+    assert any(WARN in style for style in styles), styles
+    assert all("read" not in style for style in styles), styles
+    assert any(ITEM in style for style in styles), styles
+
+    # The row under the cursor is the bright one…
+    selected = render_table(view, width=60, privacy=False, selected_index=0)
+    assert "sb-value" in {str(row.style) for row in selected.rows}  # type: ignore[attr-defined]
+    # …and severity still wins over selection: a warning row stays amber when selected.
+    warning_selected = render_table(view, width=60, privacy=False, selected_index=1)
+    warning_styles = {str(row.style) for row in warning_selected.rows}  # type: ignore[attr-defined]
+    assert "sb-warn" in warning_styles

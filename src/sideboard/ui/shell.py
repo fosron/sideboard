@@ -132,7 +132,7 @@ class DetailPane(Widget):
         self.widget_ids = tuple(widget_ids)
         self.layout_kind = layout
         if not widget_ids:
-            await self.mount(Static(Text("no widgets configured for this tab", style=DIM)))
+            await self.mount(Static(Text("nothing on this tab", style=DIM)))
             return
         if layout == "grid" and len(widget_ids) > 1:
             rows = [self.widget_ids[i : i + 2] for i in range(0, len(self.widget_ids), 2)]
@@ -178,20 +178,38 @@ class DetailPane(Widget):
             # start-up does not mark the screen for layout once per hidden tab.
             return
         even_split = max(self.MIN_CARD_ROWS, available // count)
+        heights: dict[str, int] = {}
         for index, widget_id in enumerate(self.widget_ids):
             card = self._cards.get(widget_id)
             if card is None:
                 continue
-            # Prefer the card's own estimate so a data-heavy card is not clipped, and
-            # fall back to an even split before the first presentation.
+            # Prefer the card's own estimate so a data-heavy card is not clipped, and fall
+            # back to an even split before the first presentation.
             estimated = card.estimated_content_rows() + 2  # its own border
             lead = self.layout_kind == "detail" and index == 0
-            height = min(
+            base = estimated if card.view is not None else even_split
+            heights[widget_id] = min(
                 self.MAX_CARD_ROWS,
-                max(self.MIN_CARD_ROWS, estimated if card.view is not None else even_split)
-                + (self.LEAD_CARD_EXTRA_ROWS if lead else 0),
+                max(self.MIN_CARD_ROWS, base) + (self.LEAD_CARD_EXTRA_ROWS if lead else 0),
             )
-            if card.styles.height != height:
+        # Distribute whatever is left over, round-robin, up to the cap. Cards used to keep
+        # their content height and leave the rest of the pane black — 15 empty rows on Dev,
+        # ~20 inside a full view — which on a wall display reads as missing data rather
+        # than as slack.
+        slack = available - sum(heights.values())
+        order = list(heights)
+        index = 0
+        while slack > 0 and order and index < len(order) * self.MAX_CARD_ROWS:
+            key = order[index % len(order)]
+            if heights[key] < self.MAX_CARD_ROWS:
+                heights[key] += 1
+                slack -= 1
+            index += 1
+        for widget_id, height in heights.items():
+            card = self._cards.get(widget_id)
+            if card is None:
+                continue
+            if str(card.styles.height) != str(height):
                 card.styles.height = height
 
     @staticmethod

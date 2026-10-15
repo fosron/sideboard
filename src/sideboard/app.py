@@ -75,6 +75,51 @@ from .ui.theme import build_rich_theme, build_theme
 
 log = logging.getLogger("sideboard.app")
 
+#: Two-letter tails that are initialisms, not words: "hn_top" must read "HN Top", not
+#: "Hn Top", and the Read filter must not be called "List" because the type is reddit.list.
+_ACRONYMS = frozenset({"hn", "fx", "ai", "rss", "os", "ci", "db", "ui", "api", "id"})
+
+#: Type tails that name the *shape* of a widget rather than its subject. ``reddit.list``
+#: titled "List" tells the reader nothing; the configured widget id ("reddit") does.
+_GENERIC_TAILS = frozenset(
+    {
+        "list",
+        "summary",
+        "digest",
+        "table",
+        "details",
+        "items",
+        "metrics",
+        "status",
+        "uploads",
+        "events",
+        "quotes",
+        "rates",
+        "holdings",
+        "forecast",
+        "instrument",
+        "saved",
+    }
+)
+
+
+def widget_label(widget_id: str, configured_title: str | None, type_id: str) -> str:
+    """The human name for a widget: what the user called it, or a readable fallback.
+
+    The fallback used to be ``type_id``'s tail title-cased, which produced "List" for
+    ``reddit.list`` and "Hn Top" for ``hn_top`` — an identifier wearing a capital letter,
+    shown as a tab sub-filter.
+    """
+    if configured_title:
+        return configured_title
+    tail = type_id.split(".", 1)[-1]
+    source = widget_id if not tail or tail.lower() in _GENERIC_TAILS else tail
+    words = source.replace("_", " ").split()
+    return " ".join(
+        word.upper() if word.lower() in _ACRONYMS else word.capitalize() for word in words
+    )
+
+
 TICK_SECONDS = 0.25
 STATUS_SECONDS = 1.0
 MAINTENANCE_SECONDS = 30.0
@@ -367,13 +412,12 @@ class SideboardApp(App[None]):
             instance = self.runtime.config.widget(widget_id)
             if instance is None:
                 continue
-            label = instance.title or instance.spec.type_id.split(".", 1)[-1].replace("_", " ")
-            out.append((widget_id, label.title()))
+            out.append((widget_id, widget_label(widget_id, instance.title, instance.spec.type_id)))
         return out
 
     def _labels(self) -> dict[str, str]:
         return {
-            widget_id: (instance.title or widget_id.replace("_", " ").title())
+            widget_id: widget_label(widget_id, instance.title, instance.spec.type_id)
             for widget_id, instance in self.runtime.config.widgets.items()
         }
 
@@ -941,8 +985,9 @@ class SideboardApp(App[None]):
         )
         if view is None:
             return
-        instance = self.runtime.config.widget(widget_id)
-        title = instance.title if instance is not None and instance.title else widget_id
+        # The card's own resolved title: the full view used to be titled with the widget
+        # id ("weather") while the card it opened from said "Klaipėda".
+        title = card.card_title or widget_id
         self._apply_global_hold(HoldReason.MODAL, True)
         # The full view shows the card's own line, so the two cannot disagree.
         freshness = card.freshness or freshness_line(

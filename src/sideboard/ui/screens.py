@@ -30,7 +30,7 @@ from .renderers import (
     render_table,
 )
 from .styles import BORDER_FOCUS, DIM, VALUE
-from .text import single_line
+from .text import markup_free, single_line
 
 __all__ = [
     "CommandPaletteScreen",
@@ -210,9 +210,9 @@ class DetailScreen(DismissOnOutsideClick, ModalScreen[None]):
 
     def compose(self) -> object:
         wrapper = DetailScroll(id="sb-detail")
-        wrapper.border_title = single_line(self.view_title, 60)
+        wrapper.border_title = single_line(markup_free(self.view_title), 60)
         # The same one timestamp the card shows, in the same place a card puts it.
-        wrapper.border_subtitle = single_line(self.freshness, 60) or None
+        wrapper.border_subtitle = single_line(markup_free(self.freshness), 60) or None
         yield wrapper
 
     def on_mount(self) -> None:

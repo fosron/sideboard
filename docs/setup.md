@@ -135,6 +135,14 @@ reference on screen. The tabs are the first row, so the cards get the rest of th
 * **Keyboard navigation holds the focused card for 15 seconds** (configurable).
   Programmatic initial focus does not start a hold.
 * **A detail modal pauses all visible rotation** until it is closed.
+* **Severity owns the colour channel.** A metric whose `severity` is a warning or an error
+  is drawn in that colour, and so is a table row — "failed 1" no longer looks like
+  "running 2". The card the keyboard is on is marked with `▸` and a mid-blue border
+  instead: on a wall display the cursor should not outshine a failing job. The focused
+  background lift that used to accompany it measured 1.15:1 against the surface, which is
+  not a signal, so it is gone.
+* **Stale data looks stale.** When a source is not fresh, the values are drawn muted and
+  the timestamp in the border takes the warning tone — colour, not only one dim word.
 * **Chrome says one thing.** A card's border shows one timestamp — `updated 17:05`, or
   `stale`/`expired` when that is the honest answer — and nothing else: interaction state
   ("held", "pinned") is visible from the border itself, and coverage ("partial") is stated
@@ -172,9 +180,12 @@ navigation all work from the keyboard, so nothing is lost.
 
 Terminal requirements: any terminal that reports its size. No Nerd Font, image protocol,
 gradient or special colour scheme is required. The weather card carries one symbol per
-condition (☀ ☼ ⛅ ☁ ☔ ❄ ⛈ ≡): plain Unicode in its *text* presentation — the emoji-default
-ones carry U+FE0E — so they are one cell wide, and the word beside each symbol says the
-same thing for a font that lacks it.
+condition — ☀ clear, ☼ mainly clear, ☁ cloud, ☂ rain, ❄ snow, ☈ thunderstorm, ≣ fog — and
+every one of them is a single cell in Rich's own width model with no ambiguous East Asian
+width. The obvious candidates fail that test: `⛅` and `☔` measure two cells even with
+U+FE0E, and `⛈` is width-ambiguous, so partly cloudy and overcast share the cloud and the
+word beside the symbol carries the degree. The metric grid pads by cell width, not by
+character count.
 
 ### How a tab is laid out
 
@@ -270,6 +281,7 @@ Measured in terminal columns and rows.
 
 | Size | Overview |
 |---|---|
+| 60 columns | six tabs fit; the item badge and stats appear from 48 columns inside a card, and a subtitle from 56 |
 | ≥110 × 32 | two slots per row, as many rows as there are configured slots |
 | ≥70 × 20 | pinned slot on top, merged rotating queue below |
 | ≥60 × 20 | one card at a time, pins preserved |

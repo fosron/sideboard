@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import unicodedata
 from datetime import UTC, datetime
 
 from sideboard.core.contracts import (
@@ -332,16 +333,19 @@ def test_the_current_weather_carries_one_icon(sample_payload, make_envelope) -> 
     symbol — the emoji-default ones carry U+FE0E — and an unknown code gets no icon rather
     than a guessed one.
     """
+    from rich.cells import cell_len
+
     from sideboard.features.weather.presenter import weather_icon
 
     assert weather_icon(0) == "\u2600"
     assert weather_icon(None) == ""
     assert weather_icon(1234) == ""
-    for code, icon in list(_ALL_ICONS().items()):
-        assert icon, code
-        # Text presentation: the emoji-default symbols must carry the variation selector.
-        if icon[0] in {"\u26c5", "\u2614", "\u26c8"}:
-            assert icon.endswith("\ufe0e"), (code, icon)
+    for code, icon in _ALL_ICONS().items():
+        # Measured, not assumed: every glyph must be exactly one cell in Rich's model and
+        # must not have an ambiguous East Asian width, or a row shifts by one column.
+        assert cell_len(icon) == 1, (code, icon, cell_len(icon))
+        assert unicodedata.east_asian_width(icon[0]) != "W", (code, icon)
+        assert "\ufe0e" not in icon, (code, icon)
 
     view = present(
         PresentInput(
@@ -351,7 +355,7 @@ def test_the_current_weather_carries_one_icon(sample_payload, make_envelope) -> 
         )
     )
     temperature = next(metric for metric in view.metrics if metric.id == "temperature")
-    assert temperature.value_text.startswith("\u26c5"), temperature.value_text
+    assert temperature.value_text.startswith("\u2601"), temperature.value_text
     assert temperature.numeric == sample_payload.current.temperature_c
     # Only one metric carries it: two icons on one card is noise.
     with_icon = [

@@ -21,6 +21,7 @@ __all__ = [
     "control_free",
     "item_text",
     "label_value_text",
+    "markup_free",
     "masked",
     "severity_symbol",
     "single_line",
@@ -40,6 +41,17 @@ SEVERITY_STYLE: dict[Severity, str] = {
 _CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
 _ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 _BIDI = re.compile(r"[\u202a-\u202e\u2066-\u2069]")
+
+
+def markup_free(value: object) -> str:
+    """Text safe to hand to a widget's border title or subtitle.
+
+    Textual renders those through ``Content.from_markup``, so square brackets are parsed:
+    a provider title like ``[live] News`` silently loses text, ``[link=evil.example]x[/link]``
+    becomes a terminal hyperlink, and ``[/]`` raises MarkupError. Brackets become
+    parentheses — the same shape, no parser, nothing dropped.
+    """
+    return control_free(value).replace("[", "(").replace("]", ")")
 
 
 def control_free(value: object) -> str:

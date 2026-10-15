@@ -51,7 +51,9 @@ Tabs {
 
 Tab {
     color: $sb-dim;
-    padding: 0 2;
+    /* One cell of padding per side instead of two: at the documented 60-column minimum
+       six tabs already used 57 of 60 cells, so a seventh was clipped rather than shown. */
+    padding: 0 1;
     background: $background;
 }
 
@@ -97,6 +99,8 @@ FilterBar:focus {
 
 CardShell {
     border: round $sb-border;
+    border-title-color: $sb-value;
+    border-subtitle-color: $sb-dim;
     background: $surface;
     padding: 0 1;
     height: 1fr;
@@ -115,20 +119,21 @@ CardShell.sb-pinned {
     border: round $sb-border;
 }
 
-CardShell.sb-selected {
-    border: heavy $sb-border-focus;
-}
-
-/* The card the keyboard is on: the only card with a bright border and a lifted
-   background. Declared last, and repeated for the state classes, because a class rule of
-   equal specificity that comes later wins — which is how a focused pinned card kept the
-   plain border while its background changed, and why focus was invisible. */
+/* The card the keyboard is on. A mid blue border plus the ▸ marker in the title — not the
+   brightest colour on screen: severity owns that channel, so a failing card outshines the
+   cursor. The former lifted background measured 1.15:1 against the surface, which is not a
+   signal, so it is gone. Declared last, and repeated for the state classes, because a class
+   rule of equal specificity that comes later wins. */
 CardShell:focus,
 CardShell.sb-held:focus,
-CardShell.sb-pinned:focus,
-CardShell.sb-selected:focus {
-    border: round $sb-focus;
-    background: $sb-focus-bg;
+CardShell.sb-pinned:focus {
+    border: round $sb-border-focus;
+}
+
+/* Data that is not fresh: the values are drawn muted and the timestamp carries the warning
+   tone, so a stale card cannot be read as a current one from across a room. */
+CardShell.sb-stale {
+    border-subtitle-color: $sb-warn;
 }
 
 CardShell.sb-minimal {

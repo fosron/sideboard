@@ -24,7 +24,7 @@ from ..core.clock import display_timezone, to_local
 from ..core.contracts import Connectivity, Freshness, SourceEnvelope, ViewMode, ViewModel
 from .renderers import render_items, render_metrics, render_series, render_status, render_table
 from .styles import DIM
-from .text import control_free, single_line
+from .text import control_free, markup_free, single_line
 
 __all__ = ["CardShell", "cursor_layout", "cursor_target", "freshness_line"]
 
@@ -240,19 +240,40 @@ class CardShell(Widget, can_focus=True):
         idle, which repainted the whole dashboard for nothing. ``set_class`` already
         checks for an unchanged class, so it needs no guard.
         """
+        # ▸ marks the card the keyboard is on. Focus is a *marker* now, not the loudest
+        # colour on screen: severity owns that channel, and on an iPad nobody is touching
+        # the cursor should not outshine a failing job.
+        focus_marker = "▸ " if self.has_focus else ""
         marker = "◆ " if self.is_pinned else ""
-        label = f"{marker}{control_free(self.card_title) or 'card'}"
+        label = f"{focus_marker}{marker}{markup_free(self.card_title) or 'card'}"
         if self.slot_label:
-            label = f"[{control_free(self.slot_label)}] {label}"
+            label = f"[{markup_free(self.slot_label)}] {label}"
         if label != self._chrome_title:
             self._chrome_title = label
             self.border_title = label
-        subtitle = single_line(self.freshness, 80) if self.freshness else None
+        subtitle = single_line(markup_free(self.freshness), 80) if self.freshness else None
         if subtitle != self._chrome_subtitle:
             self._chrome_subtitle = subtitle
             self.border_subtitle = subtitle
         self.set_class(self.is_held, "sb-held")
         self.set_class(self.is_pinned, "sb-pinned")
+        self.set_class(self.is_stale, "sb-stale")
+
+    @property
+    def is_stale(self) -> bool:
+        """True when the bound data is not fresh, whatever else it is.
+
+        A stale number read as current is the worst failure mode on a wall display, so the
+        card says it with colour as well as with the one word in its subtitle.
+        """
+        envelope = self.envelope
+        return envelope is not None and envelope.freshness not in {Freshness.FRESH, Freshness.NONE}
+
+    def on_focus(self) -> None:
+        self._apply_chrome()
+
+    def on_blur(self) -> None:
+        self._apply_chrome()
 
     def _build_signature(self) -> tuple[object, ...]:
         """Everything that affects what this card looks like.
@@ -443,6 +464,7 @@ class CardShell(Widget, can_focus=True):
         has_body = bool(view.metrics or view.items or view.series)
         if view.status is not None and not has_body:
             sections.append(render_status(view.status, width=width))
+        stale = self.is_stale
         if view.metrics:
             sections.append(
                 render_metrics(
@@ -450,6 +472,7 @@ class CardShell(Widget, can_focus=True):
                     width=width,
                     privacy=self.privacy,
                     columns=3 if width >= 96 else 2,
+                    dim=stale,
                 )
             )
         for series in view.series:
@@ -490,6 +513,7 @@ class CardShell(Widget, can_focus=True):
                     selected_index=(
                         self.cursor_index - item_count if self.cursor_index >= item_count else -1
                     ),
+                    dim=stale,
                 )
             )
             footnote = _table_footnote(table, width)
