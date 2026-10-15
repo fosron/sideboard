@@ -36,6 +36,7 @@ __all__ = [
     "CommandPaletteScreen",
     "DetailRow",
     "DetailScreen",
+    "DetailScroll",
     "DismissOnOutsideClick",
     "HelpScreen",
     "MouseDiagnosticScreen",
@@ -142,6 +143,30 @@ class DetailRow(Static):
         self.post_message(RowActivated(self.index))
 
 
+class DetailScroll(VerticalScroll):
+    """The modal's scroll container.
+
+    The arrows walk the rows rather than scrolling the box: a scroll container's own
+    bindings are checked before the screen's, so with the wrapper focused the chevron
+    stayed put and the list moved under it. Page keys and the wheel still scroll, and the
+    row the cursor lands on is brought into view.
+    """
+
+    BINDINGS = [
+        Binding("up", "cursor(-1)", "up", show=False),
+        Binding("k", "cursor(-1)", "up", show=False),
+        Binding("down", "cursor(1)", "down", show=False),
+        Binding("j", "cursor(1)", "down", show=False),
+    ]
+
+    def action_cursor(self, delta: str) -> None:
+        # Textual passes an action's parameters as strings: "cursor(-1)" arrives as "-1".
+        screen = self.screen
+        move = getattr(screen, "_move_cursor", None)
+        if move is not None:
+            move(int(delta))
+
+
 class DetailScreen(DismissOnOutsideClick, ModalScreen[None]):
     """Stable detail view for one card."""
 
@@ -184,7 +209,7 @@ class DetailScreen(DismissOnOutsideClick, ModalScreen[None]):
         self._item_provider = item_provider
 
     def compose(self) -> object:
-        wrapper = VerticalScroll(id="sb-detail")
+        wrapper = DetailScroll(id="sb-detail")
         wrapper.border_title = single_line(self.view_title, 60)
         # The same one timestamp the card shows, in the same place a card puts it.
         wrapper.border_subtitle = single_line(self.freshness, 60) or None
@@ -291,6 +316,14 @@ class DetailScreen(DismissOnOutsideClick, ModalScreen[None]):
         self.index = max(0, min(rows - 1, self.index + delta))
         if self.index != before:
             self._refresh_body()
+            widgets = self._row_widgets()
+            if 0 <= self.index < len(widgets):
+                # Ask the container, not the widget: `scroll_visible` goes through the
+                # screen's scrolling, which does not move this modal's own box.
+                with contextlib.suppress(Exception):
+                    self.query_one("#sb-detail", DetailScroll).scroll_to_widget(
+                        widgets[self.index], animate=False, immediate=True
+                    )
 
     def on_row_activated(self, event: RowActivated) -> None:
         """A clicked row is the selected row, and a row with a link opens it."""

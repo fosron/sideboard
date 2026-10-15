@@ -289,3 +289,85 @@ async def test_one_cursor_reaches_items_and_table_rows_and_marks_one(tmp_path: P
         await pilot.press("enter")
         await pilot.pause()
         assert opened == ["https://example.com/d16"], opened
+
+
+async def test_arrows_walk_rows_in_a_long_modal_and_page_keys_scroll() -> None:
+    """A scroll container's bindings beat the screen's, so the chevron never moved.
+
+    With the wrapper focused, `up`/`down` scrolled the box and the cursor stayed where it
+    was. The wrapper now walks the cursor; PgDn still scrolls, and the row the cursor lands
+    on is brought into view.
+    """
+    from textual.app import App
+
+    from sideboard.core.contracts import Item, Privacy, ViewModel
+    from sideboard.ui.palettes import resolve_palette
+    from sideboard.ui.screens import DetailRow, DetailScreen
+    from sideboard.ui.theme import build_rich_theme
+
+    view = ViewModel(
+        title="News",
+        items=tuple(
+            Item(
+                id=f"news:{index}",
+                title=f"Headline {index}",
+                url=f"https://example.com/{index}",
+                privacy=Privacy.PUBLIC,
+            )
+            for index in range(30)
+        ),
+    )
+
+    class Host(App[None]):
+        def on_load(self) -> None:
+            self.console.push_theme(build_rich_theme(resolve_palette("sideboard")))
+
+        def on_mount(self) -> None:
+            self.push_screen(
+                DetailScreen(
+                    title="News",
+                    view=view,
+                    privacy=False,
+                    url_provider=lambda: None,
+                    item_provider=lambda: None,
+                )
+            )
+
+    app = Host()
+    async with app.run_test(size=(100, 20)) as pilot:
+        await pilot.pause()
+        screen = app.screen
+        assert isinstance(screen, DetailScreen)
+        wrapper = screen.query_one("#sb-detail")
+        assert len(list(screen.query(DetailRow))) == 30
+        assert wrapper.scroll_offset.y == 0
+
+        await pilot.press("down")
+        await pilot.pause()
+        assert screen.index == 1, "down must move the cursor"
+        assert wrapper.scroll_offset.y == 0, "…and not scroll the box by itself"
+
+        # Rows 0..19 fit the viewport, so nothing scrolls until the cursor passes them.
+        for _ in range(24):
+            await pilot.press("down")
+            await pilot.pause()
+        assert screen.index == 25
+        assert wrapper.scroll_offset.y > 0, "the view follows the cursor past the fold"
+
+        offset = wrapper.scroll_offset.y
+        await pilot.press("pagedown")
+        await pilot.pause()
+        assert wrapper.scroll_offset.y > offset, "PgDn scrolls"
+        assert screen.index == 25, "PgDn does not move the cursor"
+
+        # The last row is reachable, and only it carries the chevron.
+        for _ in range(10):
+            await pilot.press("down")
+            await pilot.pause()
+        assert screen.index == 29
+        marked = [
+            row
+            for row in screen.query(DetailRow)
+            if "›" in str(getattr(row.visual, "_renderable", row.visual))
+        ]
+        assert len(marked) == 1, "exactly one row is marked"
