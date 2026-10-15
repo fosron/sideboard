@@ -420,6 +420,10 @@ class HelpScreen(DismissOnOutsideClick, ModalScreen[None]):
             lines.append(f"{description}\n", style=DIM)
         lines.append("\nHover pauses only the hovered card. Data keeps collecting.\n", style=DIM)
         lines.append(
+            "The footer shows the keys that apply to the card you are on.\n",
+            style=DIM,
+        )
+        lines.append(
             "The pointer/focus diagnostic is a development tool: it is in the palette "
             "(Ctrl+P) and in `sideboard doctor --mouse`.\n",
             style=DIM,

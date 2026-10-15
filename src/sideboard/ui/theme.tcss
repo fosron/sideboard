@@ -27,19 +27,6 @@ Widget {
     padding: 0 1;
 }
 
-#sb-footer-status {
-    width: 1fr;
-    background: $panel;
-    color: $sb-dim;
-}
-
-#sb-footer-help {
-    width: auto;
-    background: $panel;
-    color: $sb-dim;
-    text-align: right;
-}
-
 TabbedContent {
     height: 1fr;
 }

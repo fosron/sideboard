@@ -13,6 +13,7 @@ of the pixels. Everything here therefore asserts what is actually on the screen.
 
 from __future__ import annotations
 
+import asyncio
 import re
 from pathlib import Path
 
@@ -486,3 +487,74 @@ def test_a_table_row_is_not_dimmed_for_being_unread() -> None:
     warning_selected = render_table(view, width=60, privacy=False, selected_index=1)
     warning_styles = {str(row.style) for row in warning_selected.rows}  # type: ignore[attr-defined]
     assert "sb-warn" in warning_styles
+
+
+async def test_the_footer_shows_only_the_keys_that_work(tmp_path: Path) -> None:
+    """A footer is not a keyboard reference: it lists what applies to the card in focus.
+
+    Before, it listed seventeen keys on every screen (noise), and after that it listed
+    nothing but `? help` — which hid exactly the contextual keys (`o` for a link, `c` for
+    a discussion) that a reader needs to discover. A key never appears unless pressing it
+    would do something.
+    """
+    from dataclasses import replace
+
+    from tests.ui.test_app import make_app, settle  # type: ignore[import-not-found]
+
+    app = await make_app(tmp_path)
+    async with app.run_test(size=(140, 44)) as pilot:
+        await settle(app, pilot)
+        assert app._overview is not None
+        card = next(
+            card
+            for card in app._overview.cards.values()
+            if card.view is not None and card.view.items
+        )
+        assert card.view is not None
+        card.focus()
+        await pilot.pause()
+        footer = app._last_footer_status
+        assert "q quit" in footer, footer
+        assert "↑↓ rows" in footer, "this card has more than one row to walk"
+        assert footer.rstrip().endswith("? help"), footer
+        assert "p pin" in footer, "an Overview card can be pinned"
+        assert "n next" in footer, "…and this slot rotates"
+        view = card.view
+        assert view is not None
+        # The first row has no link: neither key is offered.
+        card.select_index(0)
+        await pilot.pause()
+        if not view.items[0].url:
+            assert "o link" not in app._last_footer_status
+        # Give the row both links: both keys appear.
+        item = replace(
+            view.items[0],
+            url="https://example.com/a",
+            alt_url="https://example.com/discussion",
+        )
+        card.view = replace(view, items=(item, *view.items[1:]))
+        # Moving the cursor is what recomputes the hints in the real app: the row under it
+        # decides whether `o` and `c` apply.
+        await pilot.press("down")
+        await pilot.press("up")
+        await pilot.pause()
+        footer = app._last_footer_status
+        assert "o link" in footer and "c comments" in footer, footer
+
+        # A table card has nothing savable and no discussion link.
+        app._run_command("tab:systems")
+        await pilot.pause()
+        await asyncio.sleep(0.6)
+        pane = app._detail_panes["systems"]
+        for widget_id in pane.widget_ids:
+            other = pane.card(widget_id)
+            if other is None:
+                continue
+            other.focus()
+            await pilot.pause()
+            footer = app._last_footer_status
+            assert "s save" not in footer, (widget_id, footer)
+            assert "c comments" not in footer, (widget_id, footer)
+            assert "p pin" not in footer, "not an Overview card"
+            break
+    await app.runtime.database.aclose()

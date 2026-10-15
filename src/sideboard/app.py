@@ -21,7 +21,6 @@ from urllib.parse import urlsplit
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding, BindingType
-from textual.containers import Horizontal
 from textual.message import Message
 from textual.widgets import Static, TabbedContent, TabPane
 
@@ -281,7 +280,7 @@ class SideboardApp(App[None]):
         self._active_tab: str | None = None
         self._hold_timers: dict[str, Any] = {}
         self._last_footer_status = ""
-        self._last_footer = ""
+        self._last_footer = ""  # kept for the reload note; the footer is composed
         self._reload_note = ""
         self._mouse_screen: MouseDiagnosticScreen | None = None
         self._unsubscribe: Any = None
@@ -322,11 +321,9 @@ class SideboardApp(App[None]):
         # The tabs are the first row: the application name and the clock live in the
         # footer, so the window gives one more row to the cards.
         yield TabbedContent(id="sb-body")
-        yield Horizontal(
-            Static(id="sb-footer-status"),
-            Static("? help", id="sb-footer-help"),
-            id="sb-footer",
-        )
+        # One composed line rather than three widgets: a variable-width Static needs a
+        # layout pass to size itself, and a layout pass per clock tick repaints the screen.
+        yield Static(id="sb-footer")
 
     # ------------------------------------------------------------------ lifecycle
 
@@ -774,6 +771,56 @@ class SideboardApp(App[None]):
         with contextlib.suppress(Exception):
             await self.runtime.items.purge_expired(self.runtime.clock.now())
 
+    def _compose_footer(self, left: str, hints: list[str]) -> str:
+        """The status on the left, the contextual keys and `? help` on the right.
+
+        The hints are dropped from the end when the line is too narrow — the order is by
+        relevance, so `p pin` and `n next` go before `o link` does — because a footer that
+        wraps or clips is worse than a shorter one.
+        """
+        right = " · ".join([*hints, "? help"])
+        width = (self.size.width or 100) - 2  # the footer's own padding
+        while hints and len(left) + 2 + len(right) > width:
+            hints = hints[:-1]
+            right = " · ".join([*hints, "? help"])
+        gap = max(1, width - len(left) - len(right))
+        return f"{left}{' ' * gap}{right}"
+
+    def _context_hints(self) -> list[str]:
+        """The keys that do something for the card in focus, and nothing else.
+
+        A footer is not a keyboard reference: it lists the few keys that would work right
+        now, so a reader never presses `c` and gets "no discussion link on this row". The
+        conditions are the same ones the actions check — this is a preview of them, not a
+        second set of rules.
+        """
+        card = self.focused_card()
+        if card is None:
+            return ["Tab cards"]
+        view = card.view
+        hints: list[str] = []
+        if card.row_count > 1:
+            hints.append("↑↓ rows")
+        hints.append("Enter open")
+        if card.selected_url():
+            hints.append("o link")
+        if card.selected_alt_url():
+            hints.append("c comments")
+        # `s` needs something savable: a reading item, not a container or a source row.
+        if view is not None and view.items and card.selected_id():
+            hints.append("s save")
+        instance = self.runtime.config.widget(card.widget_id) if card.widget_id else None
+        if instance is not None and instance.source_ids:
+            hints.append("r refresh")
+        slot_id = self._slot_of_card(card.card_key)
+        if slot_id is not None:
+            hints.append("p pin")
+            rotation = self._rotation
+            slot = rotation.slots.get(slot_id) if rotation is not None else None
+            if slot is not None and len(slot.queue) > 1:
+                hints.append("n next")
+        return hints
+
     def _update_chrome(self, *, force: bool = False) -> None:
         status = self._runtime_status
         labels: list[str] = []
@@ -794,16 +841,12 @@ class SideboardApp(App[None]):
                 labels.append(f"{status.unavailable_count} unavailable")
         if self._reload_note:
             labels.append(self._reload_note)
-        line = "Sideboard · " + " · ".join(labels)
+        left = "Sideboard · " + " · ".join(labels)
+        hints = [*self._context_hints(), "q quit"]
+        line = self._compose_footer(left, hints)
         if force or line != self._last_footer_status:
             self._last_footer_status = line
-            self._update_static("#sb-footer-status", line)
-        # One hint, not a keyboard reference: the dashboard is read from across a room, and
-        # `?` lists every key for the moment someone actually needs one.
-        footer = "? help"
-        if force or footer != self._last_footer:
-            self._last_footer = footer
-            self._update_static("#sb-footer", footer)
+            self._update_static("#sb-footer", line)
 
     def _update_static(self, selector: str, text: str) -> None:
         """Update a chrome widget if it is currently mounted.
@@ -890,6 +933,10 @@ class SideboardApp(App[None]):
             return []
         return [card for card in (pane.card(w) for w in pane.widget_ids) if card is not None]
 
+    def on_card_shell_focus_changed(self, event: CardShell.FocusChanged) -> None:
+        """Focus moved: the footer lists what applies to the new card."""
+        self._update_chrome(force=True)
+
     def on_card_shell_hold_changed(self, event: CardShell.HoldChanged) -> None:
         rotation = self._rotation
         slot_id = self._slot_of_card(event.card_key)
@@ -911,6 +958,8 @@ class SideboardApp(App[None]):
 
     def on_card_shell_selection_changed(self, event: CardShell.SelectionChanged) -> None:
         self._apply_interaction_hold(event.card_key)
+        # The row under the cursor decides whether `o` and `c` apply at all.
+        self._update_chrome()
 
     def _slot_of_card(self, card_key: str) -> str | None:
         rotation = self._rotation

@@ -269,11 +269,21 @@ class CardShell(Widget, can_focus=True):
         envelope = self.envelope
         return envelope is not None and envelope.freshness not in {Freshness.FRESH, Freshness.NONE}
 
+    class FocusChanged(Message):
+        """This card gained or lost focus, so the contextual hints must be recomputed."""
+
+        def __init__(self, card_key: str, focused: bool) -> None:
+            self.card_key = card_key
+            self.focused = focused
+            super().__init__()
+
     def on_focus(self) -> None:
         self._apply_chrome()
+        self.post_message(CardShell.FocusChanged(self.card_key, True))
 
     def on_blur(self) -> None:
         self._apply_chrome()
+        self.post_message(CardShell.FocusChanged(self.card_key, False))
 
     def _build_signature(self) -> tuple[object, ...]:
         """Everything that affects what this card looks like.

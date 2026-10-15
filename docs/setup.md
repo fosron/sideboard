@@ -99,10 +99,19 @@ read, capped at 1 MiB.
 ## 3. Controls
 
 The bottom bar carries the application name and the clock with the mode markers
-(`Sideboard · 14:52 · DEMO DATA · 1 stale`) on the left, and one hint, `? help`, on the
-right. Every key is in the help screen (`?`) and in this table; the bar deliberately does
-not list them, because a dashboard read from across a room does not need a keyboard
-reference on screen. The tabs are the first row, so the cards get the rest of the window.
+(`Sideboard · 14:52 · DEMO DATA · 1 stale`) on the left, and on the right **the keys that
+apply to the card in focus**, then `q quit`, then `? help`.
+
+The hints are contextual and honest: `o link` appears only when the row under the cursor
+has a link, `c comments` only when it has a second one, `s save` only for something
+savable, `p pin` and `n next` only on an Overview slot (and `n` only when that slot
+rotates), `r refresh` only when the widget has a source. A key is never offered when
+pressing it would only produce a "nothing to do" notice. When the line is too narrow the
+hints drop from the end — `p pin` and `n next` go before `o link` does — rather than
+wrapping or clipping. Every key, including the ones the footer never shows (`space`, `v`,
+`t`, `Ctrl+P`, `Ctrl+R`, `Ctrl+Y`), is in the help screen (`?`) and in the table below.
+
+The tabs are the first row, so the cards get the rest of the window.
 
 | Input | Action |
 |---|---|
